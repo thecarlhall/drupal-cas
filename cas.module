@@ -30,6 +30,7 @@ function cas_init() {
      // force CAS authentication
      phpCAS::forceAuthentication();
      $cas_name = phpCAS::getUser();
+     $new_user = false;
 
   // try to log into Drupal. if unsuccessful, register the user
      if(variable_get('cas_authmap', 0)) { // users are coming from Drupal; no need to use the external_load and the authmap
@@ -39,14 +40,25 @@ function cas_init() {
      }
      if(!$user->uid) {
          if(variable_get("user_register", 1) == 1) {
-         $user_default = array("name" => $cas_name, "pass" => "", "init" => db_escape_string($cas_name), "status" => 1, "roles" => array(DRUPAL_AUTHENTICATED_RID));
+         $user_default = array(
+           "name" => $cas_name, 
+           "pass" => "",
+           "init" => db_escape_string($cas_name),
+           "status" => 1,
+           "roles" => array(DRUPAL_AUTHENTICATED_RID),
+            );
+         $domain = variable_get("cas_domain"); 
+         if (isset($domain))
+           $user_default['mail'] = $cas_name . '@' . $domain;
+
          $user = user_save("", $user_default);
          watchdog("user", "new user: $user->name (CAS)", l(t("edit user"), "admin/user/edit/$user->uid"));
+         $new_user = true;
      }
     }
  if($user->uid && $user->uid > 0) { // final check to make sure we have a good user
     drupal_set_message("Logged in via CAS as " . $user->name . ".");
-    if(variable_get('cas_authmap', 0)) { // users details are controlled in Drupal; send them to their user edit page
+    if(variable_get('cas_authmap', 0) && $new_user) { // users details are controlled in Drupal; send them to their user edit page
       drupal_goto("user/" . $user->uid . "/edit");
     } else { 				 // send them to the site home page
       drupal_goto($site_frontpage);
