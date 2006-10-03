@@ -15,10 +15,13 @@ require_once('CAS/CAS.php');
 
 function cas_init() {
   global $user, $account;
+
   if ($user->uid) {
     //do nothing because user is already logged into Drupal
   }
   else if ( _cas_force_login()){
+    $user_register = variable_get('user_register',1);
+    $cas_authmap = variable_get('cas_authmap',0);
      phpCAS::setDebug();
      $server_version   = (string)variable_get('cas_version', '2.0');
      $server_cas_server  = (string)variable_get('cas_server', 'sso-cas.univ-rennes1.fr');
@@ -28,43 +31,53 @@ function cas_init() {
 
      phpCAS::client($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
      // force CAS authentication
-     phpCAS::forceAuthentication();
-     $cas_name = phpCAS::getUser();
-     $new_user = false;
+     
+     // using function check for backward compatibility of the cas libraries.  
+     // Newer versions of the cas client use authenticateIfNeeded,
+     // but older versions use forceAuthentication
+     if (is_callable(array(phpCAS,'authenticateIfNeeded')))
+     {
+       phpCAS::authenticateIfNeeded();
+     }
+     else
+     {
+       phpCAS::forceAuthentication();
+     }
 
-  // try to log into Drupal. if unsuccessful, register the user
+     $cas_name = phpCAS::getUser();
+
+     // try to log into Drupal. if unsuccessful, register the user
      if(variable_get('cas_authmap', 0)) { // users are coming from Drupal; no need to use the external_load and the authmap
          $user = user_load(array("name" => $cas_name));
-     } else {  			       // users are external; use authmap table for associating external users
+     } else {
+         // users are external; use authmap table for associating external users
         $user = user_external_load($cas_name);
+        if (!$user->uid && variable_get('cas_hijack_user',0))
+        {
+          $user = user_load(array("name" => $cas_name));
+          if ($user->uid)
+            user_set_authmaps($user,array('authname_cas' => $cas_name));
+        }
+
      }
      if(!$user->uid) {
-         if(variable_get("user_register", 1) == 1) {
-         $user_default = array(
-           "name" => $cas_name, 
-           "pass" => "",
-           "init" => db_escape_string($cas_name),
-           "status" => 1,
-           "roles" => array(DRUPAL_AUTHENTICATED_RID),
-            );
-         $domain = variable_get("cas_domain"); 
-         if (isset($domain))
-           $user_default['mail'] = $cas_name . '@' . $domain;
-
+         if($user_register == 1) {
+         $user_default = array("name" => $cas_name, "pass" => "", "init" => db_escape_string($cas_name), "status" => 1, "roles" => array(DRUPAL_AUTHENTICATED_RID));
+         if ($cas_authmap)
+           $user_default['authname_cas'] = $cas_name;
          $user = user_save("", $user_default);
          watchdog("user", "new user: $user->name (CAS)", l(t("edit user"), "admin/user/edit/$user->uid"));
-         $new_user = true;
      }
     }
- if($user->uid && $user->uid > 0) { // final check to make sure we have a good user
+  if($user->uid && $user->uid > 0) { // final check to make sure we have a good user
     drupal_set_message("Logged in via CAS as " . $user->name . ".");
-    if(variable_get('cas_authmap', 0) && $new_user) { // users details are controlled in Drupal; send them to their user edit page
+    if($cas_authmap) { // users details are controlled in Drupal; send them to their user edit page
       drupal_goto("user/" . $user->uid . "/edit");
     } else { 				 // send them to the site home page
       drupal_goto($site_frontpage);
     }
-  }
- }
+  } // if we have a good user
+ } // End if user is already logged in else
 }
 
 
@@ -93,12 +106,24 @@ function cas_menu($may_cache) {
   $items = array();
 
   if ($may_cache) {
-    $items[] = array('path' => 'admin/settings/cas', 'title' => t('CAS'),
-      'callback' => 'cas_configure', 'access' => user_access('administer cas'));
-    if ((!$user->uid) || ((arg(0)=='admin') && (arg(1) == 'menu')))
+    $items[] = array(
+      'path' => 'admin/settings/cas',
+      'title' => t('cas settings'),
+      'description' => 'Configure central authentication services',
+      'callback' => 'cas_admin_settings',
+      'access' => user_access('administer cas'),
+      'type' => MENU_NORMAL_ITEM,
+      );
+    if ((!$user->uid) || ((arg(0)=='admin') && (arg(1) == 'build') && arg(2) == 'menu'))
     {
-      $items[] = array('path' => 'cas', 'title' => t('Login'),
-       'callback' => 'cas_page', 'access' => TRUE, 'type' => MENU_NORMAL_ITEM);
+      drupal_set_message('loading menu array');
+      $items[] = array(
+       'path' => 'cas',
+       'title' => t('CAS Login'),
+       'callback' => 'cas_page',
+       'access' => TRUE,
+       'type' => MENU_SUGGESTED_ITEM,
+       );
     }
   }
   return $items;
@@ -107,7 +132,7 @@ function cas_menu($may_cache) {
 /**
 * Provides settings pages.
 */
-function cas_configure() {
+function cas_admin_settings() {
 
   $form['server'] = array('#type' => 'fieldset', '#title' => t('CAS server settings'),'#collapsible' => true,'#collapsed' => false  );
   $form['server']['cas_version'] = array('#type' => 'radios', '#title' => t('CAS Version'), '#default_value' => variable_get('cas_version', '2.0'), '#options' => array('1.0' => '1.0', '2.0' => '2.0'));
@@ -116,13 +141,14 @@ function cas_configure() {
   $form['server']['cas_uri'] = array('#type' => 'textfield', '#title' => t('CAS URI'), '#default_value' => variable_get('cas_uri', ''), '#size' => 30, '#description' => 'If CAS is not at the root of the host, include a URI (e.g., /cas)');
   $form['account'] = array('#type' => 'fieldset', '#title' => t('User account settings'),'#collapsible' => true,'#collapsed' => true);
   $form['account']['cas_authmap'] = array('#type' => 'checkbox', '#title' => t('Is Drupal also the CAS user repository?'), '#default_value' => variable_get('cas_authmap', 0), '#description' => t('In most cases, the answer will be no; an LDAP repository will be the source of CAS users. But in some cases, the Drupal user database could be used as the central user store for single sign-on. If this is the case, select this option.'));
+  $form['account']['cas_hijack_user'] = array('#type' => 'checkbox', '#title' => t('If CAS is not the user repository, should cas highjack users with the same name?'), '#default_value' => variable_get('cas_hijack_user', 0), '#description' => t('If you have pre-created regular accounts in cas that you want converted to mapped accounts, check this box.  Otherwise cas will likely throw duplicate key violation errors on new users.'));
   $form['account']['cas_domain'] = array('#type' => 'textfield',  '#title' => t('Email Domain'), '#default_value' => variable_get('cas_domain', ''), '#size' => 30,'#maxlength' => 55, '#description' => t('Append this domain name to each new user in order generate his email address.'));
   $form['account']['cas_hide_email'] = array('#type' => 'checkbox', '#title' => t('Users canot change email address'), '#default_value' => variable_get('cas_hide_email', 0), '#description' => t('Hide email address field on the edit user form'));
   $form['account']['cas_hide_password'] = array('#type' => 'checkbox', '#title' => t('Users canot change password'), '#default_value' => variable_get('cas_hide_password', 0), '#description' => t('Hides password field on the edit user form'));
   $form['pages'] = array('#type' => 'fieldset', '#title' => t('Redirection settings'),'#collapsible' => true,    '#collapsed' => true);
   $form['pages']['cas_access'] = array('#type' => 'radios', '#title' => t('Require Cas Login for '), '#default_value' => variable_get('cas_access',0), '#options' => array(t('specific pages'), t('all pages')));
   $form['pages']['cas_pages'] = array('#type' => 'textarea',  '#title' => t('Specific pages'),  '#default_value' => variable_get('cas_pages',''), '#cols' => 40,	'#rows' => 5, '#description' => t("Enter one page per line as Drupal paths. The '*' character is a wildcard. Example paths are '<em>blog</em>' for the blog page and '<em>blog/*</em>' for every personal blog. '<em>&lt;front&gt;</em>' is the front page."));
-  return system_settings_form('cas_configure', $form);
+  return system_settings_form('cas_admin_settings',$form);
 }
 
 /**
@@ -132,7 +158,7 @@ function cas_page() {
   $destination = variable_get('site_frontpage', 'node');
   if ($_REQUEST['destination']) {
     $destination = drupal_get_destination();
-    //unset($_REQUEST['destination']);
+    unset($_REQUEST['destination']);
   }
   drupal_goto($destination);
 }
