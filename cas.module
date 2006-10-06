@@ -117,9 +117,8 @@ function cas_menu($may_cache) {
       'access' => user_access('administer cas'),
       'type' => MENU_NORMAL_ITEM,
       );
-    if ((!$user->uid) || ((arg(0)=='admin') && (arg(1) == 'build') && arg(2) == 'menu'))
+    if ((!$user->uid) || ((arg(0)=='admin') && (arg(1) == 'menu')))
     {
-      drupal_set_message('loading menu array');
       $items[] = array(
        'path' => 'cas',
        'title' => t('CAS Login'),
