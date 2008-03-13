@@ -14,6 +14,53 @@ define('CAS_VERIFY', 'verify');
 define('CAS_CA_VERIFY', 'ca_verify');
 
 /**
+ * Invokes hook_auth_transform() in every module.
+ *
+ * Other modules may need to transform the results of phpCAS::getUser() into a Drupal username
+ * (i.e. phpCAS::getUser() is not guaranteed to return the same username that the user typed in
+ *       or the Drupal username might be username@cas or something and we need to know it before we filter)
+ *
+ * We cannot use hook_insert or any user hooks, because they fire way too late.
+ * We cannot use module_invoke_all(), because the argument needs to be passed by reference.
+ *
+ * @param $cas_user
+ *   The cas reply string to transform into a drupal username
+ */
+function cas_invoke_auth_transform(&$cas_name) {
+  foreach (module_list() as $module) {
+    $function = $module .'_auth_transform';
+    if (function_exists($function)) {
+      $function('cas', $cas_name);
+    }
+  }
+}
+
+/**
+ * Invokes hook_auth_filter() in every module.
+ *
+ * We cannot use module_invoke_all() for this,
+ * because we want to break out as soon as one fails.
+ *
+ * @param $cas_user
+ *   The transformed $cas_name to filter
+ *
+ * @return
+ *   TRUE if no module implementing this hook denied access
+ *   FALSE if any module returned FALSE
+ */
+function cas_invoke_auth_filter($cas_name) {
+  foreach (module_list() as $module) {
+    $function = $module .'_auth_filter';
+    if (function_exists($function)) {
+      if (($return = $function('cas', $cas_name)) === FALSE) {
+        return FALSE;
+      }
+    }
+  }
+  return TRUE;
+}
+
+/**
  * Implementation of hook_init
  * Traps a page load to see if authentication is required.
  */
@@ -48,7 +95,7 @@ function cas_login_check() {
     phpCAS::client($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
     // force CAS authentication
     // Determine if CA option is set.  This is only avialable in version 0.6 or greater, so we need to test
-    // to make sure its collable.
+    // to make sure its callable.
     if (is_callable(array(phpCAS, 'setNoCasServerValidation'))) {
       switch ($cas_cert_verify) {
         case CAS_NO_VERIFY:
@@ -77,6 +124,29 @@ function cas_login_check() {
     
     $cas_name = phpCAS::getUser();
     
+    /*
+     * Invoke hook_auth_transform($op, &$username)
+     *
+     * Allow other modules to change the login name
+     * eg. if phpCAS::getUser() returns a string like it:johndoe:10.10.1.2:200805064255
+     * eg. if your cas users in Drupal need to be johndoe@cas
+     *
+     * Note: this transformation needs to happen before we check for blocked users.
+     */
+    cas_invoke_auth_transform($cas_name);
+
+    /*
+     * Invoke hook_auth_filter($op, &$username)
+     *
+     * Allow other modules to filter out some cas logins
+     * eg. if you want to use cas authentication but only allow SOME people in
+     * eg. if you want to filter out people without LDAP home directories
+     */
+    if (($allow = cas_invoke_auth_filter($cas_name)) === FALSE) {
+      drupal_set_message("The user account $cas_name is not available on this site.", "error");
+      return;
+    }
+
     if (user_is_blocked($cas_name)) {
     	
        // blocked in user administration
