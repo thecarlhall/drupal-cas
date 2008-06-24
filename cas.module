@@ -623,7 +623,7 @@ function cas_logout() {
   }
 
   // Add logout
-  $logout_destination .= $uri .'/logout';
+  $logout_destination .= '/'. trim($uri,'/') .'/logout';
 
   // Add destination override so that a destination can be specified on the logout link
   // e.g. caslogout?desination=http://foo.bar.com/foobar
