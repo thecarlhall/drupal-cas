@@ -64,6 +64,10 @@ function cas_invoke_auth_filter($cas_name) {
  * Implementation of hook_init
  * Traps a page load to see if authentication is required.
  */
+/**
+ * Checks to see if the user needs to be logged in
+ *
+ */
 function cas_login_check() {
   global $user, $account;
   
@@ -81,9 +85,11 @@ function cas_login_check() {
         $cas_roles[$key] = $key;
       }
     }
-    //     phpCAS::setDebug();
+    if ( ($debugFile = variable_get("cas_debugfile","")) != "" ) {
+      phpCAS::setDebug($debugFile);
+    }
     $server_version    = (string)variable_get('cas_version', '2.0');
-    $server_cas_server = (string)variable_get('cas_server', '');
+    $server_cas_server = (string)variable_get('cas_server', 'sso-cas.univ-rennes1.fr');
     $server_port       = (int)variable_get('cas_port', '443');
     $server_uri        = (string)variable_get('cas_uri', '');
     $cas_domain        = (string)variable_get('cas_domain', '');
@@ -92,7 +98,18 @@ function cas_login_check() {
     // Drupal takes care of its own session
     $start_session = (boolean)FALSE;
     cas_save_page();
-    phpCAS::client($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
+    $cas_service_ticket = $_GET['ticket'];  // We use this later for CAS 3 logoutRequests
+    if ( variable_get("cas_proxy",0) ) {
+      phpCAS::proxy($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
+      $casPGTStoragePath = variable_get("cas_pgtpath","");
+      if ( $casPGTStoragePath != "" ) {
+        $casPGTFormat = variable_get("cas_pgtformat", "plain");
+        phpCAS::setPGTStorageFile($casPGTFormat, $casPGTStoragePath);
+      }
+    }
+    else {
+      phpCAS::client($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
+    }
     // force CAS authentication
     // Determine if CA option is set.  This is only avialable in version 0.6 or greater, so we need to test
     // to make sure its callable.
@@ -146,19 +163,26 @@ function cas_login_check() {
       drupal_set_message("The user account $cas_name is not available on this site.", "error");
       return;
     }
-
-    if (user_is_blocked($cas_name)) {
-    	
-       // blocked in user administration
-       drupal_set_message("The username $cas_name has been blocked.", "error");
-       return;
-     }
-     else if (drupal_is_denied('user', $cas_name)) {
-       // denied by access controls
-       drupal_set_message("The name $cas_name is a reserved username.", "error");
-       return;
-     }
-       
+    
+    // blocked user check
+    
+    if ($cas_authmap && user_is_blocked($cas_name)) {
+      // blocked in user administration
+      drupal_set_message("The username $cas_name has been blocked.", "error");
+      return;
+    }
+    // this is because users can change their name. 
+    if (!$cas_authmap && _cas_external_user_is_blocked($cas_name)) {
+      // blocked in user administration
+      drupal_set_message("The username $cas_name has been blocked.", "error");
+      return;
+    }
+    if (drupal_is_denied('user', $cas_name)) {
+      // denied by access controls
+      drupal_set_message("The name $cas_name is a reserved username.", "error");
+      return;
+    } 
+    
     // try to log into Drupal
     if ($cas_authmap) {
       // users are coming from Drupal; no need to use the external_load and the authmap
@@ -187,22 +211,23 @@ function cas_login_check() {
         if ($cas_domain) $user_default['mail'] = $cas_name .'@'. $cas_domain;
         
         // Become user 1 to be able to save profile information
+        session_save_session(FALSE);
         $admin = array('uid' => 1);
         $user = user_load($admin);
         
         // now save the user and become the new user.
         $user = user_save("", $user_default);
-        
-        watchdog("user", t('new user: %n (CAS)', array('%n' => $user->name)), WATCHDOG_NOTICE, l(t("edit user"), "admin/user/edit/$user->uid"));
+        session_save_session(TRUE);
+        watchdog("user", 'new user: %n (CAS)', array('%n' => $user->name), WATCHDOG_NOTICE, l(t("edit user"), "admin/user/edit/$user->uid"));
         if (($user->uid) && ($user->uid > 0) && $cas_authmap) {
-          module_invoke_all('user', 'login', null, $user);
+          module_invoke_all('user', 'login', NULL, $user);
           unset($_SESSION['cas_goto']);
-          watchdog('user', t('Session opened for %name.', array('%name' => $user->name)));
+          watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
           drupal_goto("user/". $user->uid ."/edit");
         }
         
         // Set a session variable to denote this the initial login
-        $_SESSION['cas_first_login'] = true;
+        $_SESSION['cas_first_login'] = TRUE;
       }
     }
     
@@ -215,8 +240,8 @@ function cas_login_check() {
       if (variable_get('cas_useldap_groups', '')) {
         if ($ldap_config_name = _get_ldap_config_name($user->name)) {
           _ldapauth_init($ldap_config_name);
-          include_once ('modules/ldap_integration/ldapgroups.module');
-          $user->ldap_authentified = true;
+          include_once('modules/ldap_integration/ldapgroups.module');
+          $user->ldap_authentified = TRUE;
           ldapgroups_user_login($user);
         }
       }
@@ -225,20 +250,40 @@ function cas_login_check() {
       ** LDAPAuth interfacing - END
       */
       
+    /*
+    ** CAS Sigle Sign Out - BEGIN
+    */
+      
+    if (variable_get('cas_signout', FALSE)) {
+      _cas_single_sign_out_save_token($user, $cas_service_ticket);
+    }
+      
+      /*
+       * CAS Single Sign Out - END
+       */
+
       // update the roles and reset the password
       $roles = $user->roles;
       foreach ($cas_roles as $role) {
         $roles[$role] = $role;
       }
+      /* Removing password cause it cases problems with phpcas. */ 
       $user_up = array(
-        "pass" => user_password(),
+ //       "pass" => user_password(),
         "roles" => $roles,
       );
       $user = user_save($user, $user_up);
       
-      module_invoke_all('user', 'login', null, $user);
+      $edit = array();
+      if (module_exists('persistent_login') && $_SESSION['cas_remember']) {
+        $edit['persistent_login'] = 1;
+      }
+      module_invoke_all('user', 'login', $edit, $user);
       drupal_set_message(t(variable_get('cas_login_message', 'Logged in via CAS as %cas_username.'), array('%cas_username' => $user->name)));
-      watchdog('user', t('Session opened for %name.', array('%name' => $user->name)));
+      if ($edit['persistent_login'] == 1) {
+        drupal_set_message(t('You will remain logged in on this computer even after you close your browser.'));
+      }
+      watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
       // We can't count on the menu because we're changing login states.
       cas_login_page();
     }
@@ -275,7 +320,6 @@ function cas_help($section) {
 function cas_menu($may_cache) {
   global $user;
   $items = array();
-  cas_login_check();
   if ($may_cache) {
     $items[] = array(
       'path' => 'admin/user/cas',
@@ -304,6 +348,9 @@ function cas_menu($may_cache) {
         'type' => MENU_SUGGESTED_ITEM,
       );
     }
+  } else { 
+    _cas_single_sign_out_check();
+    cas_login_check();
   }
   return $items;
 }
@@ -313,11 +360,11 @@ function cas_menu($may_cache) {
  */
 function cas_admin_settings() {
   
-  $form['server'] = array(
+ $form['server'] = array(
     '#type' => 'fieldset',
     '#title' => t('CAS server settings'),
-    '#collapsible' => true,
-    '#collapsed' => false,
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
   );
   
   $form['server']['cas_version'] = array(
@@ -368,13 +415,49 @@ function cas_admin_settings() {
     '#size' => 30, '#description' => 'With client version 0.6 or greater this is the certificate for validating cas or the cas CA as appropriate.',
   );
   
+  $form['server']['cas_proxy'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Initialize CAS as proxy'),
+    '#default_value' => variable_get('cas_proxy', 0),
+    '#description' => t('When using a proxy it is required to set the option "Require CAS login for:" to "specific pages" with "node/*" as a specific page or "all pages except specific pages" on the "Redirection settings".')
+  );
+      
+  $form['server']['cas_pgtformat'] = array(
+    '#type' => 'radios',
+    '#title' => t('CAS PGT storage file format'),
+    '#default_value' => variable_get('cas_pgtformat', 'plain'),
+    '#options' => array('plain' => 'Plain Text', 'xml' => 'XML'),
+  );
+      
+  $form['server']['cas_pgtpath'] = array(
+    '#type' => 'textfield',
+    '#title' => t('CAS PGT storage path'),
+    '#default_value' => variable_get('cas_pgtpath', ''),
+    '#size' => 30,
+    '#description' => "Only needed if 'Use CAS proxy initializer' is configured. Leave empty for default.",
+  );
+  
+  $form['server']['cas_signout'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable CAS Single Sign Out (CAS server 3.1 or greater)'),
+    '#default_value' => variable_get('cas_signout', FALSE),
+    '#description' => t('For more details see <a href="http://www.ja-sig.org/wiki/display/CASUM/Single+Sign+Out">http://www.ja-sig.org/wiki/display/CASUM/Single+Sign+Out</a>.'),
+  );
+  
+  $form['server']['cas_debugfile'] = array(
+    '#type' => 'textfield',
+    '#title' => t('CAS debugging output filename'),
+    '#default_value' => variable_get('cas_debugfile', ''),
+    '#size' => 30,
+    '#description' => "Leave empty if you don't want debugging output.",
+  );
   
   
   $form['account'] = array(
     '#type' => 'fieldset',
     '#title' => t('User account settings'),
-    '#collapsible' => true,
-    '#collapsed' => true,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   
   $form['account']['cas_authmap'] = array(
@@ -386,7 +469,7 @@ function cas_admin_settings() {
   
   $form['account']['cas_hijack_user'] = array(
     '#type' => 'checkbox',
-    '#title' => t('If CAS is not the user repository, should cas highjack users with the same name?'),
+    '#title' => t('If Drupal is not the user repository, should cas highjack users with the same name?'),
     '#default_value' => variable_get('cas_hijack_user', 0),
     '#description' => t('If you have pre-created regular accounts in cas that you want converted to mapped accounts, check this box.  Otherwise CAS will likely throw duplicate key violation errors on new users.'),
   );
@@ -421,12 +504,21 @@ function cas_admin_settings() {
     '#description' => t('Hide password field on the edit user form.'),
   );
   
+  if (module_exists('persistent_login')) {
+    $form['account']['cas_allow_rememberme'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Users can stay logged in between sessions'),
+      '#default_value' => variable_get('cas_allow_rememberme', 0),
+      '#description' => t('If Persistent Login is enabled, users can choose to stay logged in between browser sessions'),
+      );
+  }
+  
   $form['account']['cas_auto_assigned_role'] = array(
     '#type' => 'select',
     '#title' => t('Auto-assign users to the role(s)'),
     '#default_value' => variable_get('cas_auto_assigned_role', array(DRUPAL_AUTHENTICATED_RID)),
-    '#options' => user_roles(true),
-    '#multiple' => true,
+    '#options' => user_roles(TRUE),
+    '#multiple' => TRUE,
     '#description' => t('This value can be used to establish a role automatically for all CAS users.  As an example, if you are also using the simple_ldap module, you can use this role to establish a tie between CAS and LDAP-populated data.  i.e. Users with the role of \'cas:user\' should have their LDAP data updated automatically.'),
   );
   
@@ -434,8 +526,8 @@ function cas_admin_settings() {
   $form['pages'] = array(
     '#type' => 'fieldset',
     '#title' => t('Redirection settings'),
-    '#collapsible' => true,
-    '#collapsed' => true,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   
   $form['pages']['cas_access'] = array(
@@ -484,7 +576,7 @@ function cas_admin_settings() {
     '#type' => 'checkbox',
     '#title' => t('Redirect user on logout'),
     '#default_value' => variable_get('cas_logout_redirect', 0),
-    '#description' => t("Activate this option if you want a user to be directed after logging out of CAS. If this option is enabled, but the logout destination is not specified below, we redirect back to this site."),
+    '#description' => t("Activate this option if you want a user to be directed to the following page after logging out of CAS. The logout destination must be specified below."),
   );
   
   $form['pages']['cas_logout_destination'] = array(
@@ -493,15 +585,15 @@ function cas_admin_settings() {
     '#default_value' => variable_get('cas_logout_destination', ''),
     '#size' => 30,
     '#maxlength' => 55,
-    '#description' => t("URL. An example URL is '<em>http://www.example.com</em>'."),
+    '#description' => t("URL. An example URL is '<em>http://www.example.com</em>'. You can also use '&lt;front&gt;' for the front page."),
   );
   
   
   $form['misc'] = array(
     '#type' => 'fieldset',
     '#title' => t('Miscellaneous settings'),
-    '#collapsible' => true,
-    '#collapsed' => true,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   
   $form['misc']['cas_changePasswordURL'] = array(
@@ -522,8 +614,8 @@ function cas_admin_settings() {
   $form['ldap'] = array(
     '#type' => 'fieldset',
     '#title' => t('LDAP settings'),
-    '#collapsible' => true,
-    '#collapsed' => true,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   
   $form['ldap']['cas_useldap'] = array(
@@ -549,9 +641,9 @@ function cas_admin_settings() {
     '#description' => t('Activate this option if you want to extract the user groups from an LDAP directory. <strong>Ldapgroups module must be enabled and configured</strong>.'),
   );
   
+    
   return system_settings_form($form);
 }
-
 /**
  * Saves the page that the user was on when login was requested or required
  */
@@ -580,17 +672,16 @@ function cas_login_page() {
     $destination = variable_get('cas_first_login_destination', '');
     unset($_SESSION['cas_first_login']);
   }
-  elseif ($_GET['destination']) {
-    $destination = $_GET['destination'];
+  elseif ($_REQUEST['destination']) {
+    $destination = $_REQUEST['destination'];
   }
   elseif ($_SESSION['cas_goto']) {
     $destination = $_SESSION['cas_goto'];
-    unset($_SESSION['cas_goto']);
   }
+  unset($_SESSION['cas_goto']);
   drupal_goto($destination);
   // this should never happen.
   $output .= t("Cas page... you should never get here");
-  drupal_set_message('hi');
   return $output;
 }
 
@@ -599,9 +690,9 @@ function cas_login_page() {
  */
 function cas_logout() {
   global $user;
-  global $base_url; 
   
-  watchdog('user', t('Session closed for %name.', array('%name' => theme('placeholder', $user->name))));
+  watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
+  
   
   // Destroy the current session:
   session_destroy();
@@ -616,19 +707,21 @@ function cas_logout() {
   
   // Begin constructing logout destination
   $logout_destination = 'https://'. $server;
-
   // Add abnormal port
   if ($port != '443') {
     $logout_destination .= ':'. $port;
   }
-
   // Add logout
-  $logout_destination .= '/'. trim($uri,'/') .'/logout';
-
+  if ($uri) $logout_destination .= '/'. trim($uri, '/'); 
+  $logout_destination .= '/logout';
+  
   // Add destination override so that a destination can be specified on the logout link
   // e.g. caslogout?desination=http://foo.bar.com/foobar
   // do not accept caslogout as a valid destination, since that may cause a redirect loop
   $destination = preg_replace("/(destination=|caslogout)/", "", drupal_get_destination());
+  
+  //Make it an absolute url.  This will also convert <front> to the front page.
+  $destination = url($destination, array('absolute' => TRUE));
 
   // If there was no override and admin has set and enabled a logout destination, look for it
   if (empty($destination) && variable_get('cas_logout_redirect', 0)) {
@@ -643,10 +736,9 @@ function cas_logout() {
   // The three variables are a hack because cas server implementations don't seem to be consistent with
   // its use. 
   if ($destination) {
-    $logout_destination .= '?destination='. $destination .'&service='.$destination .'&url='.$destination;
+    $logout_destination .= '?destination='. $destination .'&service='. $destination .'&url='. $destination;
   }
   
-
   // Go to the constructed logout destination
   drupal_goto($logout_destination);
 }
@@ -671,11 +763,7 @@ function cas_block($op = 'list', $delta = 0, $edit = array()) {
           $edit = $_POST['edit'];
           
           $output = "<div class=\"user-login-block\">\n";
-          
-          // NOTE: special care needs to be taken because on pages with forms,
-          // such as node and comment submission pages, the $edit variable
-          // might already be set.
-          $output .= l(t('Login'), 'cas');
+          $output .= drupal_get_form('cas_login_form');
           $output .= "</div>\n";
           $block['subject'] = t('User Login');
           $block['content'] = $output;
@@ -683,6 +771,25 @@ function cas_block($op = 'list', $delta = 0, $edit = array()) {
         return $block;
     }
   }
+}
+
+function cas_login_form() {
+  $form['submit'] = array('#type' => 'submit', '#value' => t('Log in via CAS'));
+  if (module_exists('persistent_login') && variable_get('cas_allow_rememberme', 0)) {
+    $form['remember'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Remember me'),
+      '#default_value' => 0,
+    );
+  }
+  return $form;
+}
+
+function cas_login_form_submit($form, &$form_values) {
+  if ($form_values['remember']) {
+    $_SESSION['cas_remember'] = 1;
+  }
+  return 'cas';
 }
 
 /**
@@ -694,11 +801,11 @@ function _cas_force_login() {
   list($arg0) = split('/', $_GET['q']);
   // Don't even do the test if we're hitting the cas page
   if ($arg0 == "cas") {
-    return true;
+    return TRUE;
   }
   
   // Don't even do the test if cron.php or xmlrpc.php is invoked.  Don't require login.
-  if (base_path() .'cron.php' == $_SERVER['PHP_SELF'] || base_path() .'xmlrpc.php' == $_SERVER['PHP_SELF']) return false;
+  if (base_path() .'cron.php' == $_SERVER['PHP_SELF'] || base_path() .'xmlrpc.php' == $_SERVER['PHP_SELF']) return FALSE;
   
   // set the default behavior
   if (variable_get('cas_access', 0) == 1) {
@@ -717,8 +824,8 @@ function _cas_force_login() {
     
     // Alter the default
     if ($path_match) {
-      if ($force_login) $force_login = false;
-      else $force_login = true;
+      if ($force_login) $force_login = FALSE;
+      else $force_login = TRUE;
     }
   }
   
@@ -736,7 +843,10 @@ function cas_form_alter($form_id, &$form) {
       if (variable_get('cas_hide_email', 0)) {
         if (variable_get('cas_domain', '')) {
           $form['account']['mail']['#type'] = 'hidden';
-          $form['account']['mail']['#value'] = $form['account']['name']['#default_value'] .'@'. variable_get('cas_domain', '');
+          $form['account']['mail']['#value'] = $form['account']['mail']['#default_value']; 
+          if (!$form['account']['mail']['#default_value']) {
+            $form['account']['mail']['#value'] = $form['account']['name']['#default_value'] .'@'. variable_get('cas_domain', '');
+          }
         }
         
         /*
@@ -807,4 +917,48 @@ function _get_ldap_config_name($user_name) {
 /*
 ** LDAPAuth interfacing - END
 */
+
+/*
+ * CAS Sigle Sign Out - BEGIN
+ */
+function _cas_single_sign_out_check() {
+  if (variable_get('cas_signout', FALSE) && array_key_exists("logoutRequest", $_POST)) {
+    $cas_logout_request_xml_string = utf8_encode($_POST["logoutRequest"]);     // it's important!
+    if ($cas_logout_request_xml = domxml_open_mem($cas_logout_request_xml_string)) {
+      $cas_session_indexes = $cas_logout_request_xml->get_elements_by_tagname( "SessionIndex" );
+      if ($cas_session_indexes[0] != NULL) {
+        $cas_session_index = $cas_session_indexes[0]->get_content();
+        // Log them out now.
+        // first lets find out who we want to log off
+        $result = db_query_range("SELECT cld.uid FROM {cas_login_data} cld WHERE cld.cas_session_id = '%s'", $cas_session_index, 0, 1);
+        if ($result !== FALSE) {
+          while ($cas_login_data = db_fetch_object($result)) {
+            $uid = $cas_login_data->uid;
+            // remove all entry for user id in cas_login_data
+            db_query("DELETE FROM {cas_login_data} WHERE uid = %d", $uid);
+            // remove their session
+            db_query("DELETE FROM {sessions} WHERE uid = %d", $uid);
+            }
+        }
+      }
+    }
+  }
+}
+
+function _cas_single_sign_out_save_token($user, $cas_sign_out_token) {
+  // Ok lets save the CAS service ticket to DB so 
+  // we can handle CAS logoutRequests when they come
+  if ($user->uid && $user->uid > 0 && !empty($cas_sign_out_token)) {
+    db_query("INSERT INTO {cas_login_data} (cas_session_id, uid) VALUES ('%s', %d)", $cas_sign_out_token, $user->uid);
+  }
+}
+
+/*
+** CAS Sigle Sign Out - END
+*/
+
+function _cas_external_user_is_blocked($name) {
+  $deny = db_fetch_object(db_query("SELECT u.name FROM {users} u JOIN {authmap} m ON u.uid=m.uid WHERE status = 0 AND m.authname = LOWER('%s')", $name));
+  return $deny;
+}
 
