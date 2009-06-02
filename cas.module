@@ -83,7 +83,7 @@ function cas_login_check() {
     }
     //     phpCAS::setDebug();
     $server_version    = (string)variable_get('cas_version', '2.0');
-    $server_cas_server = (string)variable_get('cas_server', 'sso-cas.univ-rennes1.fr');
+    $server_cas_server = (string)variable_get('cas_server', '');
     $server_port       = (int)variable_get('cas_port', '443');
     $server_uri        = (string)variable_get('cas_uri', '');
     $cas_domain        = (string)variable_get('cas_domain', '');
@@ -627,13 +627,8 @@ function cas_logout() {
 
   // Add destination override so that a destination can be specified on the logout link
   // e.g. caslogout?desination=http://foo.bar.com/foobar
-  // do not accept caslogout as a valid sestination, since that may cause a redirect loop
+  // do not accept caslogout as a valid destination, since that may cause a redirect loop
   $destination = preg_replace("/(destination=|caslogout)/", "", drupal_get_destination());
-
-  // make sure the destination is an absolute path as this is going off to another server
-  if (!empty($destination) && (!preg_match("|http(s)?\:\/\/|", $destination))) {
-    $destination = $base_url .'/'. $destination;
-  }
 
   // If there was no override and admin has set and enabled a logout destination, look for it
   if (empty($destination) && variable_get('cas_logout_redirect', 0)) {
@@ -645,9 +640,12 @@ function cas_logout() {
   }
 
   // Add the log out destination if we have one
-  if (!empty($destination)) {
-    $logout_destination .= '?service='. $destination ;
+  // The three variables are a hack because cas server implementations don't seem to be consistent with
+  // its use. 
+  if ($destination) {
+    $logout_destination .= '?destination='. $destination .'&service='.$destination .'&url='.$destination;
   }
+  
 
   // Go to the constructed logout destination
   drupal_goto($logout_destination);
