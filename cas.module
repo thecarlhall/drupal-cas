@@ -721,8 +721,8 @@ function cas_logout() {
   $destination = preg_replace("/(destination=|caslogout)/", "", drupal_get_destination());
   
   //Make it an absolute url.  This will also convert <front> to the front page.
-  $destination = url($destination, array('absolute' => TRUE));
-
+  $destination = url($destination, null,null,TRUE);
+  
   // If there was no override and admin has set and enabled a logout destination, look for it
   if (empty($destination) && variable_get('cas_logout_redirect', 0)) {
     $destination = variable_get('cas_logout_destination', '');
