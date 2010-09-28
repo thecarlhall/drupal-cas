@@ -795,6 +795,12 @@ function cas_login_page() {
     $destination = $_SESSION['cas_goto'];
   }
   unset($_SESSION['cas_goto']);
+
+  // Change the user/login and user/register urls to the users current page.
+  if ($destination == 'user/login' || $destination = 'user/register') {
+    $destination = 'user/'. $user->uid;
+  }
+  
   drupal_goto($destination);
   // this should never happen.
   $output .= t("Cas page... you should never get here");
