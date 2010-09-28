@@ -17,6 +17,8 @@ define('CAS_LOGIN_INVITE_DEFAULT', 'Log in via single sign-on (CAS)');
 define('CAS_LOGIN_DRUPAL_INVITE_DEFAULT', 'Log in locally (no single sign-on)');
 define('CAS_LOGIN_REDIR_MESSAGE', 'You will be redirected to the secure cas login page'); 
 define('CAS_EXCLUDE', 'services/*'); 
+define('CAS_AUTHMAP_EXTERNAL',0);  // Use external authmap entries for cas
+define('CAS_AUTHMAP_INTERNAL',1);  // Use drupal as the internal user. 
  
 
 /**
@@ -1202,12 +1204,11 @@ function _cas_force_login() {
   
   return $force_login;
 }
-
 /**
  * implementation of hook_form_alter
  * Overrides specific from settings based on user policy.
  */
-function cas_form_alter(&$form, $form_state, $form_id) {
+function cas_form_alter(&$form, $form_state, $form_id) { 
   //drupal_set_message($form_id.'<pre>'.print_r($form,1).'</pre>');
   switch ($form_id) {
     case 'user_login':    
@@ -1255,7 +1256,7 @@ function cas_form_alter(&$form, $form_state, $form_id) {
     
     case 'user_profile_form':
       //make the email field hidden and force the value to the default.
-      if (variable_get('cas_hide_email', 0)) {
+      if (variable_get('cas_hide_email', 0) && cas_is_external_user()) {
         if (variable_get('cas_domain', '')) {
           $form['account']['mail']['#type'] = 'hidden';
           $form['account']['mail']['#value'] = $form['account']['mail']['#default_value']; 
@@ -1267,7 +1268,7 @@ function cas_form_alter(&$form, $form_state, $form_id) {
       }
       
       //Remove the password fields from the form.
-      if (variable_get('cas_hide_password', 0))unset($form['account']['pass']);
+      if (variable_get('cas_hide_password', 0) && cas_is_external_user())unset($form['account']['pass']);
       break;
     
     case 'user_pass':
@@ -1321,6 +1322,38 @@ function _cas_single_sign_out_check() {
     }
   }
 }
+
+/**
+ * Return the current cas user based on sessioin variables
+ *
+ */
+function cas_current_user() { 
+  return $_SESSION['phpCAS']['user']; 
+}
+
+/**
+ * Determine whether the current user is an "external" cas user. 
+ * When settings are set to use drupal as the user repository, then this 
+ * function will always return true. 
+ * 
+ * @return unknown
+ */
+function cas_is_external_user() {
+  if (variable_get('cas_authmap',0)== CAS_AUTHMAP_EXTERNAL) { 
+     $authname = cas_current_user(); 
+     $map = user_get_authmaps($authname);
+     if ($map['cas']) { 
+       return TRUE;     
+     }
+     else {
+       return FALSE; 
+     }
+  }
+  else { 
+    return TRUE;  
+  }
+}
+
 
 function _cas_single_sign_out_save_token($user, $cas_sign_out_token) {
   // Ok lets save the CAS service ticket to DB so 
