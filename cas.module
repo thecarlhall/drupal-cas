@@ -314,43 +314,35 @@ function cas_login_check() {
     
     // final check to make sure we have a good user
     if ($user->uid && $user->uid > 0) {
-      
-    /*
- 	  ** CAS Sigle Sign Out - BEGIN
- 	  */
-      
+     
+    // Save single sign out information
     if (variable_get('cas_signout', FALSE)) {
       _cas_single_sign_out_save_token($user, $cas_service_ticket);
     }
       
-      /*
-       * CAS Single Sign Out - END
-       */
-
-      // update the roles and reset the password
-      $roles = $user->roles;
-      foreach ($cas_roles as $role) {
-        $roles[$role] = $role;
-      }
-      /* Removing password cause it cases problems with phpcas. */ 
-      $user_up = array(
- //       "pass" => user_password(),
-        "roles" => $roles,
-      );
-      $user = user_save($user, $user_up);
-      
-      $edit = array();
-      if (module_exists('persistent_login') && $_SESSION['cas_remember']) {
-        $edit['persistent_login'] = 1;
-      }
-      user_module_invoke('login', $edit, $user);
-      drupal_set_message(t(variable_get('cas_login_message', 'Logged in via CAS as %cas_username.'), array('%cas_username' => $user->name)));
-      if ($edit['persistent_login'] == 1) {
-        drupal_set_message(t('You will remain logged in on this computer even after you close your browser.'));
-      }
-      watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
-      // We can't count on the menu because we're changing login states.
-      cas_login_page();
+    // update the roles and reset the password
+    $roles = $user->roles;
+    foreach ($cas_roles as $role) {
+      $roles[$role] = $role;
+    }
+    /* Removing password cause it cases problems with phpcas. */ 
+    $user_up = array(
+      "roles" => $roles,
+    );
+    $user = user_save($user, $user_up);
+    
+    $edit = array();
+    if (module_exists('persistent_login') && $_SESSION['cas_remember']) {
+      $edit['persistent_login'] = 1;
+    }
+    user_module_invoke('login', $edit, $user);
+    drupal_set_message(t(variable_get('cas_login_message', 'Logged in via CAS as %cas_username.'), array('%cas_username' => $user->name)));
+    if ($edit['persistent_login'] == 1) {
+      drupal_set_message(t('You will remain logged in on this computer even after you close your browser.'));
+    }
+    watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
+    // We can't count on the menu because we're changing login states.
+    cas_login_page();
     }
     // if we have a good user
     else {
