@@ -169,6 +169,7 @@ function cas_login_check() {
     cas_save_page();
     $cas_service_ticket = $_GET['ticket'];  // We use this later for CAS 3 logoutRequests
     if ( variable_get("cas_proxy", 0) ) {
+      drupal_set_message('proxy'); 
       phpCAS::proxy($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
       $casPGTStoragePath = variable_get("cas_pgtpath", "");
       if ( $casPGTStoragePath != "" ) {
@@ -926,7 +927,7 @@ function cas_login_page() {
   unset($_SESSION['cas_goto']);
   
   // Change the user/login and user/register urls to the users current page. 
-  if ($destination == 'user/login' || $destination = 'user/register') { 
+  if ($destination == 'user/login' || $destination == 'user/register') { 
     $destination = 'user/'. $user->uid; 
   }
   
