@@ -112,7 +112,7 @@ function cas_login_check() {
   global $user, $account;
   
   
-  if ($user->uid) {
+  if (isset($user->uid) && $user->uid) {
     //Don't Login  because we already are
     return; 
   }
@@ -182,7 +182,7 @@ function cas_login_check() {
     // force CAS authentication
     // Determine if CA option is set.  This is only avialable in version 0.6 or greater, so we need to test
     // to make sure its callable.
-    if (is_callable(array(phpCAS, 'setNoCasServerValidation'))) {
+    if (is_callable(array('phpCAS', 'setNoCasServerValidation'))) {
       switch ($cas_cert_verify) {
         case CAS_NO_VERIFY:
           phpCAS::setNoCasServerValidation();
@@ -208,7 +208,7 @@ function cas_login_check() {
       // using function check for backward compatibility of the cas libraries.
       // Newer versions of the cas client use authenticateIfNeeded,
       // but older versions use forceAuthentication
-      if (is_callable(array(phpCAS, 'authenticateIfNeeded'))) {
+      if (is_callable(array('phpCAS', 'authenticateIfNeeded'))) {
         phpCAS::authenticateIfNeeded();
       }
       else {
@@ -269,14 +269,16 @@ function cas_login_check() {
     else {
       // users are external; use authmap table for associating external users
       $user = user_external_load($cas_name);
-      if (!$user->uid && variable_get('cas_hijack_user', 0)) {
+      if (!isset($user->uid) && variable_get('cas_hijack_user', 0)) {
         $user = user_load(array("name" => $cas_name));
-        if ($user->uid) user_set_authmaps($user, array('authname_cas' => $cas_name));
+        if (isset($user->uid)) {
+          user_set_authmaps($user, array('authname_cas' => $cas_name));
+        }
       }
     }
     
     // If we don't have a user register them.
-    if (!$user->uid) {
+    if (!isset($user->uid)) {
       if ($cas_user_register == 1) {
         $user_default = array(
           "name" => $cas_name,
@@ -335,7 +337,7 @@ function cas_login_check() {
     }
     user_module_invoke('login', $edit, $user);
     drupal_set_message(t(variable_get('cas_login_message', 'Logged in via CAS as %cas_username.'), array('%cas_username' => $user->name)));
-    if ($edit['persistent_login'] == 1) {
+    if (isset($edit['persistent_login']) && $edit['persistent_login'] == 1) {
       drupal_set_message(t('You will remain logged in on this computer even after you close your browser.'));
     }
     watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
@@ -888,15 +890,19 @@ function cas_admin_settings() {
  * Saves the page that the user was on when login was requested or required
  */
 function cas_save_page() {
-  if (!$_SESSION['cas_goto']) {
-    if (arg(0) == 'cas') {
+  if (!isset($_SESSION['cas_goto'])) {
+    if (arg(0) == 'cas' && isset($_SERVER['HTTP_REFERER'])) {
       //we're were destined to the CAS login page, so set
       //the page to the referrer.
       $_SESSION['cas_goto'] = $_SERVER['HTTP_REFERER'];
     }
-    else {
+    elseif (isset($_GET['q'])) {
       //We're destined for another page, so save the group.
       $_SESSION['cas_goto'] = $_GET['q'];
+    }
+    else {
+      // No idea where we are coming from or going to, so pick the front page.
+      $_SESSION['cas_goto'] = variable_get('site_frontpage', 'node');
     }
   }
 }
@@ -908,14 +914,14 @@ function cas_login_page() {
   global $user;
   $destination = variable_get('site_frontpage', 'node');
   // If it is the user's first CAS login and initial login redirection is enabled, go to the set page
-  if ($_SESSION['cas_first_login'] && (variable_get('cas_first_login', 0) == 1)) {
+  if (isset($_SESSION['cas_first_login']) && (variable_get('cas_first_login', 0) == 1)) {
     $destination = variable_get('cas_first_login_destination', '');
     unset($_SESSION['cas_first_login']);
   }
-  elseif ($_REQUEST['destination']) {
+  elseif (isset($_REQUEST['destination'])) {
     $destination = $_REQUEST['destination'];
   }
-  elseif ($_SESSION['cas_goto']) {
+  elseif (isset($_SESSION['cas_goto'])) {
     $destination = $_SESSION['cas_goto'];
   }
   unset($_SESSION['cas_goto']);
