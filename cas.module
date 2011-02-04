@@ -930,7 +930,6 @@ function cas_login_page() {
   if ($destination == 'user/login' || $destination == 'user/register') { 
     $destination = 'user/'. $user->uid; 
   }
-  
   drupal_goto($destination);
   // this should never happen.
   $output .= t("Cas page... you should never get here");
@@ -1300,17 +1299,26 @@ function cas_login_validate($form, &$form_state) {
  */
 function _cas_single_sign_out_check() {
   if (variable_get('cas_signout', FALSE) && array_key_exists("logoutRequest", $_POST)) {
-    $cas_logout_request_xml_string = utf8_encode($_POST["logoutRequest"]);     // it's important!
-    if ($cas_logout_request_xml = domxml_open_mem($cas_logout_request_xml_string)) {
-      $cas_session_indexes = $cas_logout_request_xml->get_elements_by_tagname( "SessionIndex" );
-      if ($cas_session_indexes[0] != NULL) {
-        $cas_session_index = $cas_session_indexes[0]->get_content();
+    $cas_logout_request_xml_string = utf8_encode($_POST["logoutRequest"]);     // it's important!     
+    $cas_logout_request_xml = new SimpleXMLElement($cas_logout_request_xml_string);    
+    if (is_object($cas_logout_request_xml)) {
+      $namespaces = $cas_logout_request_xml->getNameSpaces();
+      $xsearch = 'SessionIndex';  
+      if (isset($namespaces['samlp'])) {
+        $cas_logout_request_xml->registerXPathNamespace('samlp', $namespaces['samlp']); 
+         $xsearch = 'samlp:SessionIndex';
+      }
+      $cas_session_indexes = $cas_logout_request_xml->xpath( $xsearch);
+      if ($cas_session_indexes) {
+        $cas_session_index = (string)$cas_session_indexes[0]; 
         // Log them out now.
         // first lets find out who we want to log off
         $result = db_query_range("SELECT cld.uid FROM {cas_login_data} cld WHERE cld.cas_session_id = '%s'", $cas_session_index, 0, 1);
         if ($result !== FALSE) {
           while ($cas_login_data = db_fetch_object($result)) {
             $uid = $cas_login_data->uid;
+            $acct = user_load($uid);  
+            watchdog('user','Session closed for %name', array('%name' => $acct->name)); 
             // remove all entry for user id in cas_login_data
             db_query("DELETE FROM {cas_login_data} WHERE uid = %d", $uid);
             // remove their session
