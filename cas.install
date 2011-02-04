@@ -79,3 +79,16 @@ function cas_update_1() {
   db_create_table($ret, 'cas_login_data', $schema['cas_login_data']);
   return $ret;
 }
+
+/**
+ * Depreciate "Verify the server using PEM cerificate" option.
+ */
+function cas_update_6300() {
+  if (variable_get('cas_cert_verify', 'none') == 'verify') {
+    variable_set('cas_cert_verify', 'none');
+  }
+  $ret = array(); 
+  return $ret; 
+}
+
+

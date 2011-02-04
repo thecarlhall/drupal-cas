@@ -8,7 +8,6 @@
  */
 
 define('CAS_NO_VERIFY', 'none');
-define('CAS_VERIFY', 'verify');
 define('CAS_CA_VERIFY', 'ca_verify');
 define('CAS_NO_LINK', 0);
 define('CAS_ADD_LINK', 1);
@@ -167,7 +166,7 @@ function cas_login_check() {
     // Drupal takes care of its own session
     $start_session = (boolean)FALSE;
     cas_save_page();
-    $cas_service_ticket = $_GET['ticket'];  // We use this later for CAS 3 logoutRequests
+    _cas_single_sign_out_save_ticket();  // We use this later for CAS 3 logoutRequests
     if ( variable_get("cas_proxy", 0) ) {
       drupal_set_message('proxy'); 
       phpCAS::proxy($server_version, $server_cas_server, $server_port, $server_uri, $start_session);
@@ -187,10 +186,6 @@ function cas_login_check() {
       switch ($cas_cert_verify) {
         case CAS_NO_VERIFY:
           phpCAS::setNoCasServerValidation();
-          break;
-        
-        case CAS_VERIFY:
-          phpCAS::setCasServerCert($cas_cert);
           break;
         
         case CAS_CA_VERIFY:
@@ -320,7 +315,7 @@ function cas_login_check() {
      
     // Save single sign out information
     if (variable_get('cas_signout', FALSE)) {
-      _cas_single_sign_out_save_token($user, $cas_service_ticket);
+      _cas_single_sign_out_save_token($user);
     }
       
     // update the roles and reset the password
@@ -625,7 +620,6 @@ function cas_admin_settings() {
     '#default_value' => variable_get('cas_cert_verify', CAS_NO_VERIFY),
     '#options' => array(
       CAS_NO_VERIFY => t('Do not verify the certificate'),
-      CAS_VERIFY => t('Verify the server using PEM cerificate'),
       CAS_CA_VERIFY => t('Verify the Certificate Authority using PEM certificate'),
     ),
   );
@@ -1354,11 +1348,20 @@ function cas_is_external_user() {
 }
 
 
-function _cas_single_sign_out_save_token($user, $cas_sign_out_token) {
+function _cas_single_sign_out_save_token($user) {
+  // Token was saved previously in $_SESSION['cas_ticket'].
+
   // Ok lets save the CAS service ticket to DB so 
   // we can handle CAS logoutRequests when they come
-  if ($user->uid && $user->uid > 0 && !empty($cas_sign_out_token)) {
-    db_query("INSERT INTO {cas_login_data} (cas_session_id, uid) VALUES ('%s', %d)", $cas_sign_out_token, $user->uid);
+  if ($user->uid && $user->uid > 0 && !empty($_SESSION['cas_ticket'])) {
+    db_query("INSERT INTO {cas_login_data} (cas_session_id, uid) VALUES ('%s', %d)", $_SESSION['cas_ticket'], $user->uid);
+    unset($_SESSION['cas_ticket']);
+  }
+}
+
+function _cas_single_sign_out_save_ticket() {
+  if (isset($_GET['ticket'])) {
+    $_SESSION['cas_ticket'] = $_GET['ticket'];
   }
 }
 
