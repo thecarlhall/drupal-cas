@@ -299,14 +299,7 @@ function cas_login_check() {
         $user = user_save("", $user_default);
         session_save_session(TRUE);
         watchdog("user", 'new user: %n (CAS)', array('%n' => $user->name), WATCHDOG_NOTICE, l(t("edit user"), "admin/user/edit/$user->uid"));
-        $edit = array(); 
-        if (($user->uid) && ($user->uid > 0) && $cas_authmap) {
-          user_module_invoke( 'login', $edit, $user);
-          unset($_SESSION['cas_goto']);
-          watchdog('user', 'Session opened for %name.', array('%name' => $user->name));
-          drupal_goto("user/". $user->uid ."/edit");
-        }
-        
+         
         // Set a session variable to denote this the initial login
         $_SESSION['cas_first_login'] = TRUE;
       }
