@@ -42,6 +42,7 @@ function cas_invoke_auth_transform(&$cas_name) {
   }
 }
 
+
 /**
  * Invokes hook_auth_filter() in every module.
  *
@@ -1204,44 +1205,43 @@ function cas_form_alter(&$form, $form_state, $form_id) {
   switch ($form_id) {
     case 'user_login':    
     case 'user_login_block':
-      if (variable_get('cas_login_form', CAS_NO_LINK) == CAS_NO_LINK) {
-        break;
+      if (variable_get('cas_login_form', CAS_ADD_LINK) == CAS_ADD_LINK || variable_get('cas_login_form', CAS_MAKE_DEFAULT) == CAS_MAKE_DEFAULT) {
+        drupal_add_css(drupal_get_path('module', 'cas') .'/cas.css', 'module');
+        drupal_add_js(drupal_get_path('module', 'cas') .'/cas.js');
+        if ($form_state['post']['cas_identifier'] == 1) {
+          $form['name']['#required'] = FALSE;
+          $form['pass']['#required'] = FALSE;
+          unset($form['#submit']);
+          $form['#validate'] = array('cas_login_validate');
+        }
+  
+        $items = array();
+        $items[] = array(
+          'data' => l(t(variable_get('cas_login_invite', CAS_LOGIN_INVITE_DEFAULT)), '', array('fragment' => ' ', 'external' => TRUE)),
+          'class' => 'cas-link',
+        );
+        
+        $items[] = array(
+          'data' => l(t(variable_get('cas_login_drupal_invite', CAS_LOGIN_DRUPAL_INVITE_DEFAULT)), '', array('fragment' => ' ', 'external' => TRUE)), 
+          'class' => 'uncas-link',
+        );
+        
+        $form['cas_links'] = array(
+          '#value' => theme('item_list', $items),
+          '#weight' => 1,
+        );
+  
+        $form['links']['#weight'] = 2;
+  
+        $form['cas_identifier'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Log in using NetID'),
+          '#default_value' => (variable_get('cas_login_form', CAS_NO_LINK) == CAS_ADD_LINK ? 0 : 1),
+          '#weight' => -1,
+          '#description' => t(variable_get('cas_login_redir_message', CAS_LOGIN_REDIR_MESSAGE)),
+        );
+        $form['cas.return_to'] = array('#type' => 'hidden', '#value' => 'cas');
       }
-      drupal_add_css(drupal_get_path('module', 'cas') .'/cas.css', 'module');
-      drupal_add_js(drupal_get_path('module', 'cas') .'/cas.js');
-      if ($form_state['post']['cas_identifier'] == 1) {
-        $form['name']['#required'] = FALSE;
-        $form['pass']['#required'] = FALSE;
-        unset($form['#submit']);
-        $form['#validate'] = array('cas_login_validate');
-      }
-
-      $items = array();
-      $items[] = array(
-        'data' => l(t(variable_get('cas_login_invite', CAS_LOGIN_INVITE_DEFAULT)), '', array('fragment' => ' ', 'external' => TRUE)),
-        'class' => 'cas-link',
-      );
-      
-      $items[] = array(
-        'data' => l(t(variable_get('cas_login_drupal_invite', CAS_LOGIN_DRUPAL_INVITE_DEFAULT)), '', array('fragment' => ' ', 'external' => TRUE)), 
-        'class' => 'uncas-link',
-      );
-      
-      $form['cas_links'] = array(
-        '#value' => theme('item_list', $items),
-        '#weight' => 1,
-      );
-
-      $form['links']['#weight'] = 2;
-
-      $form['cas_identifier'] = array(
-        '#type' => 'checkbox',
-        '#title' => t('Log in using NetID'),
-        '#default_value' => (variable_get('cas_login_form', CAS_NO_LINK) == CAS_ADD_LINK ? 0 : 1),
-        '#weight' => -1,
-        '#description' => t(variable_get('cas_login_redir_message', CAS_LOGIN_REDIR_MESSAGE)),
-      );
-      $form['cas.return_to'] = array('#type' => 'hidden', '#value' => 'cas');
       break;
 
     
