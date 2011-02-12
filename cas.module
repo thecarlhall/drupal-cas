@@ -1381,10 +1381,3 @@ function _cas_external_user_is_blocked($name) {
   return $deny;
 }
 
-/**
- * Return the current cas user based on sessioin variables
- *
- */
-function cas_current_user() {
-  return isset($_SESSION['phpCAS']['user']) ? $_SESSION['phpCAS']['user'] : FALSE;
-}
