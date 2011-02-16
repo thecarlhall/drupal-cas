@@ -35,9 +35,9 @@ define('CAS_AUTHMAP_INTERNAL',1);  // Use drupal as the internal user.
  */
 function cas_invoke_auth_transform(&$cas_name) {
   foreach (module_list() as $module) {
-    $function = $module .'_auth_transform';
+    $function = $module .'cas_auth_transform';
     if (function_exists($function)) {
-      $function('cas', $cas_name);
+      $function($cas_name);
     }
   }
 }
@@ -58,9 +58,9 @@ function cas_invoke_auth_transform(&$cas_name) {
  */
 function cas_invoke_auth_filter($cas_name) {
   foreach (module_list() as $module) {
-    $function = $module .'_auth_filter';
+    $function = $module .'cas_auth_filter';
     if (function_exists($function)) {
-      if (($return = $function('cas', $cas_name)) === FALSE) {
+      if (($return = $function($cas_name)) === FALSE) {
         return FALSE;
       }
     }
@@ -269,17 +269,20 @@ function cas_login_check() {
     }
     else {
       // users are external; use authmap table for associating external users
-      $user = user_external_load($cas_name);
+      $result = db_query("SELECT uid FROM {cas_user} WHERE cas_name = '%s'", $cas_name);
+      if ($uid = db_fetch_array($result)) {
+        $user = user_load($uid);
+      }
       if (!isset($user->uid) && variable_get('cas_hijack_user', 0)) {
         $user = user_load(array("name" => $cas_name));
         if (isset($user->uid)) {
-          user_set_authmaps($user, array('authname_cas' => $cas_name));
+          @db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $user->uid, $cas_name);
         }
       }
     }
     
     // If we don't have a user register them.
-    if (!isset($user->uid)) {
+    if (empty($user) || !$user->uid) {
       if ($cas_user_register == 1) {
         $user_default = array(
           "name" => $cas_name,
@@ -288,7 +291,6 @@ function cas_login_check() {
           "status" => 1,
           "roles" => $cas_roles,
         );
-        if (!$cas_authmap) $user_default['authname_cas'] = $cas_name;
         if ($cas_domain) $user_default['mail'] = $cas_name .'@'. $cas_domain;
         
         // Become user 1 to be able to save profile information
@@ -298,6 +300,10 @@ function cas_login_check() {
         
         // now save the user and become the new user.
         $user = user_save("", $user_default);
+        if (!$cas_authmap) {
+          db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $user->uid, $cas_name);
+        }
+
         session_save_session(TRUE);
         watchdog("user", 'new user: %n (CAS)', array('%n' => $user->name), WATCHDOG_NOTICE, l(t("edit user"), "admin/user/edit/$user->uid"));
          
@@ -342,6 +348,7 @@ function cas_login_check() {
     else {
       session_destroy();
       $user = drupal_anonymous_user();
+      drupal_set_message(t('No account found for %cas_name.', array('%cas_name' => $cas_name)));
     }
   }
   // End if user is already logged in else
@@ -400,6 +407,18 @@ function cas_menu() {
   
   return $items;
 }
+
+/**
+ * Implement hook_user().
+ *
+ * When a CAS user is deleted, we need to clean up the entry in {cas_user}.
+ */
+function cas_user($op, &$edit, &$account) {
+  if ($op == 'delete') {
+    db_query("DELETE FROM {cas_user} WHERE uid = %d", $account->uid);
+  }
+}
+
 
 /**
  * Expandee file_exists function
@@ -1340,14 +1359,7 @@ function cas_current_user() {
  */
 function cas_is_external_user() {
   if (variable_get('cas_authmap',0)== CAS_AUTHMAP_EXTERNAL) { 
-     $authname = cas_current_user(); 
-     $map = user_get_authmaps($authname);
-     if ($map['cas']) { 
-       return TRUE;     
-     }
-     else {
-       return FALSE; 
-     }
+     return cas_current_user() !== FALSE;
   }
   else { 
     return TRUE;  
@@ -1377,7 +1389,7 @@ function _cas_single_sign_out_save_ticket() {
 */
 
 function _cas_external_user_is_blocked($name) {
-  $deny = db_fetch_object(db_query("SELECT u.name FROM {users} u JOIN {authmap} m ON u.uid=m.uid WHERE status = 0 AND m.authname = LOWER('%s')", $name));
+  $deny = db_fetch_object(db_query("SELECT u.name FROM {users} u JOIN {cas_user} c ON u.uid=c.uid WHERE status = 0 AND c.cas_name = LOWER('%s')", $name));
   return $deny;
 }
 
