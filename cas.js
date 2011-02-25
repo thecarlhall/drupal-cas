@@ -1,4 +1,3 @@
-// $Id$
 
 Drupal.behaviors.cas = function (context) {
   var $loginElements = $("#edit-name-wrapper, #edit-pass-wrapper, #user-login-form li, #user-login li");
