@@ -311,7 +311,57 @@ function cas_menu() {
 }
 
 /**
- * Implementation of hook_user().
+ * Implementation of hook_user_operations().
+ */
+function cas_user_operations($form = array(), $form_state = array()) {
+  $operations['cas_create'] = array(
+    'label' => t('Create CAS username'),
+    'callback' => 'cas_user_operations_create_username',
+  );
+  $operations['cas_remove'] = array(
+    'label' => t('Remove CAS usernames'),
+    'callback' => 'cas_user_operations_remove_usernames',
+  );
+  return $operations;
+}
+
+/**
+ * Callback function to assign a CAS username to the account.
+ *
+ * @param $uids
+ *   An array of user ids. For each account, a CAS username is created with
+ *   the same name as the Drupal username.
+ *
+ * @see cas_user_operations().
+ */
+function cas_user_operations_create_username($uids) {
+  foreach ($uids as $uid) {
+    $account = user_load(array('uid' => (int)$uid));
+    $count = db_result(db_query("SELECT COUNT(*) FROM {cas_user} c WHERE c.uid <> %d AND c.cas_name = '%s'", $account->uid, $account->name));
+    if ($count) {
+      drupal_set_message(t('CAS username %username already in use.', array('%username' => $account->name)), 'error');
+      continue;
+    }
+    @db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $account->name);
+  }
+}
+
+/**
+ * Callback function to remove CAS usernames from the account.
+ *
+ * @param $uids
+ *   An array of user ids. For each account, all CAS usernames are removed.
+ *
+ * @see cas_user_operations().
+ */
+function cas_user_operations_remove_usernames($uids) {
+  foreach ($uids as $uid) {
+    db_query("DELETE FROM {cas_user} WHERE uid = %d", $uid);
+  }
+}
+
+/**
+* Implementation of hook_user().
  *
  * Delete:
  *   When a CAS user is deleted, we need to clean up the entry in {cas_user}.
@@ -797,6 +847,19 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
     case 'user_register':
       if (!user_access('administer users') && variable_get('cas_registerURL', '') != '') {
         drupal_goto(variable_get('cas_registerURL', ''));
+      }
+      break;
+
+    case 'user_admin_account':
+      foreach (array_keys($form['name']) as $uid) {
+        $result = db_query('SELECT cas_name FROM {cas_user} WHERE uid = %d', $uid);
+        $cas_names = array();
+        while ($record = db_fetch_object($result)) {
+          $cas_names[] = $record->cas_name;
+        }
+        if ($cas_names) {
+          $form['name'][$uid]['#value'] .= ' ' . check_plain('(' . implode(', ', $cas_names) . ')');
+        }
       }
       break;
   }
