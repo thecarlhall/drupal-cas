@@ -396,7 +396,7 @@ function cas_user($op, &$edit, &$account) {
   }
   elseif ($op == 'insert') {
     if (!empty($edit['cas_name'])) {
-      db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $acount->uid, $edit['cas_name']);
+      db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
     }
   }
   elseif ($op == 'load') {
@@ -418,7 +418,7 @@ function cas_user($op, &$edit, &$account) {
     if ($count == 0) {
       if (!empty($cas_name)) {
         // Add a CAS username.
-        db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $acount->uid, $edit['cas_name']);
+        db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
       }
     }
     elseif ($count == 1) {
@@ -862,7 +862,19 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
       break;
 
     case 'user_register':
-      if (!user_access('administer users') && variable_get('cas_registerURL', '') != '') {
+      if (user_access('administer users')) {
+        $element = array(
+          '#type' => 'textfield',
+          '#title' => t('CAS username'),
+          '#default_value' => '',
+          '#description' => t('If necessary, additional CAS usernames can be added after the account is created.'),
+          '#element_validate' => array('_cas_user_register_cas_name_element_validate'),
+        );
+        // Position the element directly below the 'name' field.
+        $position = array_search('name', array_keys($form)) + 1;
+        _cas_array_insert($form, $position, array('cas' => $element));
+      }
+      elseif (variable_get('cas_registerURL', '') != '') {
         drupal_goto(variable_get('cas_registerURL', ''));
       }
       break;
@@ -879,6 +891,17 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
         }
       }
       break;
+  }
+}
+
+/**
+ * Form element 'cas_name' validator on user_register_form().
+ */
+function _cas_user_register_cas_name_element_validate($element, &$form_state) {
+  if (!empty($element['#value'])) {
+    if (db_result(db_query("SELECT cas_name FROM {cas_user} WHERE cas_name = '%s'", $element['#value']))) {
+      form_set_error('cas_name', t('The CAS username is already in use on this site.'));
+    }
   }
 }
 
@@ -1041,4 +1064,15 @@ function cas_user_register($cas_name) {
   watchdog("user", 'new user: %n (CAS)', array('%n' => $account->name), WATCHDOG_NOTICE, l(t("edit user"), "admin/user/edit/$account->uid"));
 
   return $account;
+}
+
+/**
+ * Insert an array into the specified position of another array.
+ *
+ * Preserves keys in associative arrays.
+ * @see http://www.php.net/manual/en/function.array-splice.php#56794
+ */
+function _cas_array_insert(&$array, $position, $insert_array) {
+  $first_array = array_splice($array, 0, $position);
+  $array = array_merge($first_array, $insert_array, $array);
 }
