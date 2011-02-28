@@ -121,8 +121,8 @@ function cas_update_6300() {
   if (variable_get('cas_cert_verify', 'none') == 'verify') {
     variable_set('cas_cert_verify', 'none');
   }
-  $ret = array(); 
-  return $ret; 
+  $ret = array();
+  return $ret;
 }
 
 /**
@@ -167,7 +167,7 @@ function cas_update_6301() {
   );
 
   // Create {cas_user} table.
-  $ret = array(); 
+  $ret = array();
   db_create_table($ret, 'cas_user', $schema['cas_user']);
 
   // Migrate entries from {authmap} to {cas_user}.
@@ -178,4 +178,3 @@ function cas_update_6301() {
 
   return $ret;
 }
-
