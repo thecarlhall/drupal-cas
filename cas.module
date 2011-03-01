@@ -168,11 +168,11 @@ function cas_login_check() {
     // blocked user check
     $blocked = FALSE;
     if (_cas_external_user_is_blocked($cas_name)) {
-        $blocked = 'The username %cas_name has been blocked.';
+      $blocked = 'The username %cas_name has been blocked.';
     }
     elseif (drupal_is_denied('user', $cas_name)) {
       // denied by access controls
-      return 'The name %cas_name is a reserved username.';
+      $blocked = 'The name %cas_name is a reserved username.';
     }
 
     if ($blocked) {
