@@ -416,6 +416,8 @@ function cas_user($op, &$edit, &$account) {
     while ($record = db_fetch_object($result)) {
       $account->cas_names[$record->aid] = $record->cas_name;
     }
+    reset($account->cas_names);
+    $account->cas_name = current($account->cas_names);
   }
   elseif ($op == 'update') {
     if (!array_key_exists('cas_name', $edit)) {
@@ -425,15 +427,9 @@ function cas_user($op, &$edit, &$account) {
     $cas_name = $edit['cas_name'];
 
     // See if the user currently has any CAS names.
-    $count = count($account->cas_names);
-    if ($count == 0) {
-      if (!empty($cas_name)) {
-        // Add a CAS username.
-        db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
-      }
-    }
-    elseif ($count == 1) {
-      list($aid) = array_keys($account->cas_names);
+    reset($account->cas_names);
+    if ($aid = key($account->cas_names)) {
+      // The user already has CAS username(s) set.
       if (empty($cas_name)) {
         // Remove a CAS username.
         db_query("DELETE FROM {cas_user} WHERE uid = %d AND aid = %d", $account->uid, $aid);
@@ -443,6 +439,13 @@ function cas_user($op, &$edit, &$account) {
         if ($cas_name != $account->cas_names[$aid]) {
           db_query("UPDATE {cas_user} SET cas_name = '%s' WHERE aid = %d", $cas_name, $aid);
         }
+      }
+    }
+    else {
+      // No current CAS usernames.
+      if (!empty($cas_name)) {
+        // Add a CAS username.
+        db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
       }
     }
   }
@@ -851,22 +854,19 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
       if (user_access('administer users')) {
         // The user is an administrator, so add fields to allow changing the
         // CAS username(s) associated with the account.
-        if (count($account->cas_names) <= 1) {
-          $element = array(
-            '#type' => 'textfield',
-            '#title' => t('CAS username'),
-            '#default_value' => empty($account->cas_names) ? '' : current($account->cas_names),
-            '#description' => t('<a href="@url">Create, edit or delete</a> additional CAS usernames associated with this account.', array('@url' => url('user/' . $account->uid . '/cas'))),
-            '#element_validate' => array('_cas_user_profile_cas_name_element_validate'),
-          );
-        }
-        else {
-          $element = array(
-            '#type' => 'item',
-            '#title' => t('CAS usernames'),
-            '#description' => t('<a href="@url">Create, edit or delete</a> CAS usernames associated with this account.', array('@url' => url('user/' . $account->uid . '/cas'))),
-            '#value' => t('%cas_names.', array('%cas_names' => implode(', ', $account->cas_names))),
-          );
+        $element = array(
+          '#type' => 'textfield',
+          '#title' => t('CAS username'),
+          '#default_value' => $account->cas_name,
+          '#description' => t('<a href="@url">Create, edit or delete</a> additional CAS usernames associated with this account.', array('@url' => url('user/' . $account->uid . '/cas'))),
+          '#element_validate' => array('_cas_user_profile_cas_name_element_validate'),
+        );
+
+        // See if any additional CAS usernames exist.
+        $cas_names = $account->cas_names;
+        array_shift($cas_names);
+        if (!empty($cas_names)) {
+          $element['#description'] .= ' <br />' . t('Other CAS usernames: %cas_names.', array('%cas_names' => implode(', ', $cas_names)));
         }
         // Position the element directly below the 'name' field.
         $position = array_search('name', array_keys($form['account'])) + 1;
