@@ -721,7 +721,7 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
       if (variable_get('cas_login_form', CAS_ADD_LINK) == CAS_ADD_LINK || variable_get('cas_login_form', CAS_MAKE_DEFAULT) == CAS_MAKE_DEFAULT) {
         drupal_add_css(drupal_get_path('module', 'cas') .'/cas.css', 'module');
         drupal_add_js(drupal_get_path('module', 'cas') .'/cas.js');
-        if ($form_state['post']['cas_identifier'] == 1) {
+        if (!empty($form_state['post']['cas_identifier'])) {
           $form['name']['#required'] = FALSE;
           $form['pass']['#required'] = FALSE;
           unset($form['#submit']);
@@ -864,7 +864,7 @@ function _cas_user_register_cas_name_element_validate($element, &$form_state) {
  * Login form _validate hook
  */
 function cas_login_validate($form, &$form_state) {
-  if ($form_state['values']['persistent_login'] == 1) {
+  if (!empty($form_state['values']['persistent_login'])) {
     $_SESSION['cas_remember'] = 1;
   }
   $_REQUEST['destination'] = 'cas';
