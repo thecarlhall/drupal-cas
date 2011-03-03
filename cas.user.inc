@@ -41,6 +41,11 @@ function cas_add_user_form_submit($form, &$form_state) {
 
   // Allow other modules to make their own custom changes.
   cas_user_module_invoke('presave', $edit, $account);
+
+  // Clean up extra variables before saving.
+  unset($edit['cas_user']);
+  unset($edit['cas_first_login']);
+
   $account = user_save($account, $edit);
 
   // Terminate if an error occurred during user_save().

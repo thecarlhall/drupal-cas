@@ -213,6 +213,10 @@ function cas_login_check() {
       // Allow other modules to make their own custom changes.
       cas_user_module_invoke('presave', $edit, $account);
 
+      // Clean up extra variables before saving.
+      unset($edit['cas_user']);
+      unset($edit['cas_first_login']);
+
       // Save the user account and log the user in.
       $user = user_save($account, $edit);
       user_authenticate_finalize($edit);
@@ -384,6 +388,7 @@ function cas_user($op, &$edit, &$account) {
     if (!empty($edit['cas_name'])) {
       db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
     }
+    $edit['cas_name'] = NULL;
   }
   elseif ($op == 'load') {
     $account->cas_names = array();
@@ -424,6 +429,7 @@ function cas_user($op, &$edit, &$account) {
       }
     }
   }
+  $edit['cas_name'] = NULL;
 }
 
 /**
