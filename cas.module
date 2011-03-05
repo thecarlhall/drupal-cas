@@ -468,7 +468,6 @@ function cas_login_page($cas_first_login = TRUE) {
   // If it is the user's first CAS login and initial login redirection is enabled, go to the set page
   if ($cas_first_login && variable_get('cas_first_login', FALSE)) {
     $destination = variable_get('cas_first_login_destination', '');
-    unset($_SESSION['cas_first_login']);
   }
   elseif (isset($_REQUEST['destination'])) {
     $destination = $_REQUEST['destination'];
