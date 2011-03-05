@@ -462,7 +462,7 @@ function cas_save_page() {
  *   TRUE if the user was just registered and they should be redirected to the
  *   configured 'Initial login landing page'.
  */
-function cas_login_page($cas_first_login = TRUE) {
+function cas_login_page($cas_first_login = FALSE) {
   global $user;
   $destination = variable_get('site_frontpage', 'node');
   // If it is the user's first CAS login and initial login redirection is enabled, go to the set page
