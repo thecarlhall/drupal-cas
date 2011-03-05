@@ -33,7 +33,7 @@ Installation
   displayed if the library is found.
 
 Upgrading from 6.x-2.x / Associating CAS usernames with Drupal users
-=====================================================================
+====================================================================
 
 The following options have been depreciated:
 * "Is Drupal also the CAS user repository?"
@@ -46,12 +46,12 @@ name. The update.php script has automatically inserted entries into the lookup
 table so that your users will continue to be able to log in as before.
 
 You can see the results of the update script and manage CAS usernames on the
-"Administration >> People" (admin/people) page. A new column displays CAS
-usernames, and the bulk operations drop-down includes options for rapidly
-creating and removing CAS usernames. The "Create CAS username" option will
-assign a CAS username to each selected account that matches their Drupal name.
-The "Remove CAS usernames" option will remove all CAS usernames from the
-selected accounts.
+"Administer >> User Management >> Users" (admin/user/user) page. The CAS
+usernames are shown in parentheses next to the Drupal username. The bulk
+operations drop-down includes options for rapidly creating and removing CAS
+usernames. The "Create CAS username" option will assign a CAS username to each
+selected account that matches their Drupal name. The "Remove CAS usernames"
+option will remove all CAS usernames from the selected accounts.
 
 API Changes Since 6.x-2.x
 =========================
