@@ -276,6 +276,11 @@ function cas_menu() {
     'type' => MENU_NORMAL_ITEM,
     'file' => 'cas.admin.inc',
   );
+  $items['admin/user/cas/settings'] = array(
+    'title' => 'CAS',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
   $items['admin/user/user/cas/create'] = array(
     'title' => 'Add CAS user',
     'page callback' => 'drupal_get_form',
