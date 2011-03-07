@@ -182,14 +182,25 @@ function cas_admin_settings() {
       );
   }
 
-  $form['account']['cas_auto_assigned_role'] = array(
-    '#type' => 'select',
-    '#title' => t('Auto-assign users to the role(s)'),
-    '#default_value' => variable_get('cas_auto_assigned_role', array(DRUPAL_AUTHENTICATED_RID)),
-    '#options' => user_roles(TRUE),
-    '#multiple' => TRUE,
-    '#description' => t('This value can be used to establish a role automatically for all CAS users.  As an example, if you are also using the simple_ldap module, you can use this role to establish a tie between CAS and LDAP-populated data.  i.e. Users with the role of \'cas:user\' should have their LDAP data updated automatically.'),
-  );
+  // Taken from Drupal's User module.
+  if (user_access('administer permissions')) {
+    $roles = array_map('check_plain', user_roles(TRUE));
+    $checkbox_authenticated = array(
+      '#type' => 'checkbox',
+      '#title' => $roles[DRUPAL_AUTHENTICATED_RID],
+      '#default_value' => TRUE,
+      '#disabled' => TRUE,
+    );
+    unset($roles[DRUPAL_AUTHENTICATED_RID]);
+    $form['account']['cas_auto_assigned_role'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Auto-assign users to the role(s)'),
+      '#description' => t('This value can be used to establish a role automatically for all CAS users.  As an example, if you are also using the simple_ldap module, you can use this role to establish a tie between CAS and LDAP-populated data.  i.e. Users with the role of \'cas:user\' should have their LDAP data updated automatically.'),
+      '#default_value' => variable_get('cas_auto_assigned_role', array()),
+      '#options' => $roles,
+      DRUPAL_AUTHENTICATED_RID => $checkbox_authenticated,
+    );
+  }
 
 
   $form['pages'] = array(
