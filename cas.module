@@ -455,8 +455,8 @@ function cas_user($op, &$edit, &$account) {
         db_query("INSERT INTO {cas_user} (uid, cas_name) VALUES (%d, '%s')", $account->uid, $edit['cas_name']);
       }
     }
+    $edit['cas_name'] = NULL;
   }
-  $edit['cas_name'] = NULL;
 }
 
 /**
