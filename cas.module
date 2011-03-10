@@ -87,7 +87,13 @@ function cas_login_check() {
     if ( ($debugFile = variable_get("cas_debugfile", "")) != "" ) {
       phpCAS::setDebug($debugFile);
     }
-    // Drupal takes care of its own session
+    // Start a Drupal session, if necessary.
+    if (function_exists('drupal_session_start')) {
+      // PressFlow (and D7) require manually starting the session. Failure to
+      // do so will result in an infinite redirection loop as phpCAS requires
+      // a valid session to complete the authentication process.
+      drupal_session_start();
+    }
     $start_session = (boolean)FALSE;
     cas_save_page();
     _cas_single_sign_out_save_ticket();  // We use this later for CAS 3 logoutRequests
