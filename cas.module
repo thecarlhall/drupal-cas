@@ -812,43 +812,47 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
       break;
 
     case 'user_profile_form':
-      $account = user_load($form['#uid']);
-      if (user_access('administer users')) {
-        // The user is an administrator, so add fields to allow changing the
-        // CAS username(s) associated with the account.
-        $element = array(
-          '#type' => 'textfield',
-          '#title' => t('CAS username'),
-          '#default_value' => $account->cas_name,
-          '#description' => t('<a href="@url">Create, edit or delete</a> additional CAS usernames associated with this account.', array('@url' => url('user/' . $account->uid . '/cas'))),
-          '#element_validate' => array('_cas_user_profile_cas_name_element_validate'),
-        );
+      // We alter the 'account' tab only, not any other tab provided by the
+      // profile module.
+      if ($form['_category']['#value'] == 'account') {
+        $account = user_load($form['#uid']);
+        if (user_access('administer users')) {
+          // The user is an administrator, so add fields to allow changing the
+          // CAS username(s) associated with the account.
+          $element = array(
+            '#type' => 'textfield',
+            '#title' => t('CAS username'),
+            '#default_value' => $account->cas_name,
+            '#description' => t('<a href="@url">Create, edit or delete</a> additional CAS usernames associated with this account.', array('@url' => url('user/' . $account->uid . '/cas'))),
+            '#element_validate' => array('_cas_user_profile_cas_name_element_validate'),
+          );
 
-        // See if any additional CAS usernames exist.
-        $cas_names = $account->cas_names;
-        array_shift($cas_names);
-        if (!empty($cas_names)) {
-          $element['#description'] .= ' <br />' . t('Other CAS usernames: %cas_names.', array('%cas_names' => implode(', ', $cas_names)));
-        }
-        // Position the element directly below the 'name' field.
-        $position = array_search('name', array_keys($form['account'])) + 1;
-        _cas_array_insert($form['account'], $position, array('cas_name' => $element));
-      }
-      elseif (cas_is_external_user($account)) {
-        // The user is not an administrator, so selectively remove the e-mail
-        // and password fields.
-        if (variable_get('cas_hide_email', 0)) {
-          // We cannot just unset mail, as then the form throws an error.
-          // Also, we have to provide a reasonable default as otherwise there
-          // will be a validation errors.
-          $form['account']['mail']['#type'] = 'hidden';
-          $form['account']['mail']['#value'] = $form['account']['mail']['#default_value'];
-          if (!$form['account']['mail']['#default_value']) {
-            $form['account']['mail']['#value'] = $form['_account']['#value']->name . '@' . variable_get('cas_domain', '');
+          // See if any additional CAS usernames exist.
+          $cas_names = $account->cas_names;
+          array_shift($cas_names);
+          if (!empty($cas_names)) {
+            $element['#description'] .= ' <br />' . t('Other CAS usernames: %cas_names.', array('%cas_names' => implode(', ', $cas_names)));
           }
+          // Position the element directly below the 'name' field.
+          $position = array_search('name', array_keys($form['account'])) + 1;
+          _cas_array_insert($form['account'], $position, array('cas_name' => $element));
         }
-        if (variable_get('cas_hide_password', 0)) {
-          unset($form['account']['pass']);
+        elseif (cas_is_external_user($account)) {
+          // The user is not an administrator, so selectively remove the e-mail
+          // and password fields.
+          if (variable_get('cas_hide_email', 0)) {
+            // We cannot just unset mail, as then the form throws an error.
+            // Also, we have to provide a reasonable default as otherwise there
+            // will be a validation errors.
+            $form['account']['mail']['#type'] = 'hidden';
+            $form['account']['mail']['#value'] = $form['account']['mail']['#default_value'];
+            if (!$form['account']['mail']['#default_value']) {
+              $form['account']['mail']['#value'] = $form['_account']['#value']->name . '@' . variable_get('cas_domain', '');
+            }
+          }
+          if (variable_get('cas_hide_password', 0)) {
+            unset($form['account']['pass']);
+          }
         }
       }
       break;
