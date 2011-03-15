@@ -214,7 +214,7 @@ function cas_update_6301() {
   db_create_table($ret, 'cas_user', $schema['cas_user']);
 
   // Migrate entries from {authmap} to {cas_user}.
-  db_query('INSERT INTO {cas_user} (uid, cas_name) SELECT a.uid AS uid, a.authname AS cas_name FROM {authmap} a WHERE a.module = "cas"');
+  db_query('INSERT INTO {cas_user} (uid, cas_name) SELECT a.uid AS uid, a.authname AS cas_name FROM {authmap} a WHERE a.module = "cas" AND a.uid <> 0');
 
   // Remove old entries in {authmap}.
   db_query('DELETE FROM {authmap} WHERE module = "cas"');
