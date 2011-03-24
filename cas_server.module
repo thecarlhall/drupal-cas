@@ -30,7 +30,14 @@ function cas_server_menu() {
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   ); 
-  
+
+  $items['cas/proxyValidate'] = array(
+    'page callback' => 'cas_server_service_validate',
+    'title' => t('CAS Proxy Service Validate'),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+
   $items['cas/logout'] = array(
     'page callback' => 'cas_server_logout', 
     'title' => t('CAS Logout'),
