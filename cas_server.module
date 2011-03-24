@@ -25,8 +25,8 @@ function cas_server_menu() {
   );
 
   $items['cas/proxyValidate'] = array(
-    'page callback' => 'cas_server_validate',
-    'title' => 'CAS Validate',
+    'page callback' => 'cas_server_service_validate',
+    'title' => 'CAS Proxy Service Validate',
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   );
