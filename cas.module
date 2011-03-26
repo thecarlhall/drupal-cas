@@ -508,7 +508,7 @@ function cas_save_page() {
       //the page to the referrer.
       $_SESSION['cas_goto'] = $_SERVER['HTTP_REFERER'];
     }
-    elseif (isset($_GET['q'])) {
+    elseif (isset($_GET['q']) && $_GET['q'] != 'cas') {
       //We're destined for another page, so save the group.
       $_SESSION['cas_goto'] = $_GET['q'];
     }
