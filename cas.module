@@ -886,7 +886,7 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
         );
         // Position the element directly below the 'name' field.
         $position = array_search('name', array_keys($form)) + 1;
-        _cas_array_insert($form, $position, array('cas' => $element));
+        _cas_array_insert($form, $position, array('cas_name' => $element));
       }
       elseif (variable_get('cas_registerURL', '') != '') {
         drupal_goto(variable_get('cas_registerURL', ''));
