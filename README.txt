@@ -58,14 +58,15 @@ API Changes Since 6.x-2.x
 The hooks hook_auth_name() and hook_auth_filter() were combined and renamed
 to hook_cas_user_alter(). See cas.api.php.
 
-
 Testing
 =======
-Testing routines were added in the file cas.test. To run them, you will need
-to install the SimpleTest module (http://drupal.org/project/simpletest). To
-maintain a common test code base with 7.x-1.x, the test routines require a
-recent version of SimpleTest, namely 6.x-2.x-dev or 6.x-2.12.
+The CAS module comes with built-in test routines. To enable testing on a
+development site, download and enable the 'SimpleTest' module
+(http://drupal.org/project/simpletest). The CAS test routines require a
+version of SimpleTest newer than 6.x-2.11 -- for example, 6.x-2.x-dev.
+Then navigate to Admin > Site Building > Testing. The CAS test routines are
+available under "Central Authentication Service".
 
-Also, phpCAS versions 1.2.0 and 1.2.1 contain a bug making them incompatible
-for testing. Either use version 1.1.3, or modify the CAS/client.php file
-replacing 'private function getURL()' with 'public function getURL()'.
+Note, the CAS test routines will automatically download phpCAS from the JASIG
+website, to ensure a version compatible with the test routines, and so that
+the tests may run successfully on qa.drupal.org.
