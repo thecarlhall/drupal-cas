@@ -75,7 +75,7 @@ class CasTestHelper extends DrupalWebTestCase {
     $files = $archiver->listContent();
 
     // We extract to the private directory, for security.
-    $extract_dir = file_directory_temp() . '/cas';
+    $extract_dir = file_directory_temp();
     $cas_library_dir = $extract_dir . '/' . strtok($files[1]['filename'], '/\\');
     $archiver->extract($extract_dir);
     $this->pass(t('Extracted @local to @extract_dir.', array('@local' => $local, '@extract_dir' => $extract_dir)));
