@@ -61,14 +61,17 @@ class CasTestHelper extends DrupalWebTestCase {
 
     // Download and extact the archive, but only in one thread.
     if (!file_exists($local_archive)) {
-      tempnam($simpletest_cache, 'downloading');
       $result = drupal_http_request($url);
       file_put_contents($local_archive, $result->data);
     }
     if (!file_exists($cas_library_dir)) {
-      tempnam($simpletest_cache, 'extracting');
+      // Get Archive_Tar. @see http://drupal.org/node/1113618.
+      $archive_tar = $simpletest_cache . '/archive_tar.inc';
+      $result = drupal_http_request('http://drupal.org/files/issues/system.tar_.inc_.txt');
+      file_put_contents($archive_tar, $result->data);
+      include_once $archive_tar;
+
       // Extract the files.
-      module_load_include('inc', 'cas_test', 'cas_test.tar');
       $archiver = new Archive_Tar($local_archive);
       $archiver->extract($simpletest_cache);
     }
