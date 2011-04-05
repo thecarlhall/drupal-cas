@@ -65,7 +65,6 @@ function cas_login_check() {
       // a valid session to complete the authentication process.
       drupal_session_start();
     }
-    cas_save_page();
     _cas_single_sign_out_save_ticket();  // We use this later for CAS 3 logoutRequests
 
     // Initialize phpCAS.
@@ -274,6 +273,9 @@ function cas_phpcas_init($force = FALSE) {
       break;
   }
 
+  $service = isset($_GET['q']) ? $_GET['q'] : 'cas';
+  phpCAS::setFixedServiceURL(url($service, array('query' => cas_login_destination(), 'absolute' => TRUE)));
+
   // Allow other modules to call phpCAS routines. We do not call
   // drupal_alter() since there are no parameters to pass.
   module_invoke_all('cas_phpcas_alter');
@@ -362,7 +364,43 @@ function cas_menu() {
 }
 
 /**
- * Implementation of hook_user_operations().
+ * Implements hook_menu_link_alter().
+ *
+ * Flag this link as needing alter at display time.
+ * @see cas_translated_menu_link_alter().
+ **/
+function cas_menu_link_alter(&$item, $menu) {
+  if ($item['link_path'] == 'cas' || $item['link_path'] == 'caslogout') {
+    $item['options']['alter'] = TRUE;
+  }
+}
+
+/**
+ * Implements hook_translated_menu_item_alter().
+ *
+ * Append dynamic query 'destination' to several menu items.
+ **/
+function cas_translated_menu_link_alter(&$item, $map) {
+  if ($item['href'] == 'cas') {
+    $item['localized_options']['query'] = drupal_get_destination();
+  }
+  elseif ($item['href'] == 'caslogout' && !variable_get('cas_logout_destination', '')) {
+    $item['localized_options']['query'] = drupal_get_destination();
+  }
+}
+
+/**
+ * Helper function to rewrite the destination to avoid redirecting to login page after login.
+ *
+ * Instead of the login page, we redirect to the front page.
+ */
+function cas_login_destination() {
+  $destination = user_login_destination();
+  return $destination == 'destination=cas' ? 'destination=' : $destination;
+}
+
+/**
+ * Implements hook_user_operations().
  */
 function cas_user_operations($form = array(), $form_state = array()) {
   $operations['cas_create'] = array(
@@ -508,27 +546,6 @@ function cas_user_load_by_name($cas_name, $alter = FALSE) {
 }
 
 /**
- * Saves the page that the user was on when login was requested or required
- */
-function cas_save_page() {
-  if (!isset($_SESSION['cas_goto'])) {
-    if (arg(0) == 'cas' && isset($_SERVER['HTTP_REFERER'])) {
-      //we're were destined to the CAS login page, so set
-      //the page to the referrer.
-      $_SESSION['cas_goto'] = $_SERVER['HTTP_REFERER'];
-    }
-    elseif (isset($_GET['q']) && $_GET['q'] != 'cas') {
-      //We're destined for another page, so save the group.
-      $_SESSION['cas_goto'] = $_GET['q'];
-    }
-    else {
-      // No idea where we are coming from or going to, so pick the front page.
-      $_SESSION['cas_goto'] = '';
-    }
-  }
-}
-
-/**
  * Redirects to appropriate page based on user settings.
  *
  * @param $cas_first_login
@@ -541,22 +558,10 @@ function cas_login_page($cas_first_login = FALSE) {
   // If it is the user's first CAS login and initial login redirection is enabled, go to the set page
   if ($cas_first_login && variable_get('cas_first_login_destination', '')) {
     $destination = variable_get('cas_first_login_destination', '');
-  }
-  elseif (isset($_REQUEST['destination'])) {
-    $destination = $_REQUEST['destination'];
-  }
-  elseif (isset($_SESSION['cas_goto'])) {
-    $destination = $_SESSION['cas_goto'];
-  }
-  unset($_SESSION['cas_goto']);
-
-  // Change the user/login and user/register urls to the users current page.
-  if ($destination == 'user/login' || $destination == 'user/register') {
-    $destination = 'user/' . $user->uid;
+    unset($_REQUEST['destination']);
   }
 
-  // Force redirection.
-  unset($_REQUEST['destination']);
+  // Respect the query string, if transmitted.
   drupal_goto($destination);
 }
 
