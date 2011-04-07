@@ -100,8 +100,14 @@ function cas_test_login() {
     // Generate a ticket and redirect to the service URL with the login ticket.
     $ticket = _cas_test_ticket_generate($service, $cas_name);
     // Force redirection.
-    unset($_GET['destination']);
+    unset($_REQUEST['destination']);
     drupal_goto($service, array('ticket' => $ticket));
+  }
+  elseif (isset($_GET['gateway']) && $_GET['gateway'] == 'true') {
+    // We were not able to log in the user, so redirect to the service URL.
+    // Force redirection.
+    unset($_REQUEST['destination']);
+    drupal_goto($service);
   }
   else {
     // No CAS name was provided, print an error message.
