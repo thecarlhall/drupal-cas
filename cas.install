@@ -314,8 +314,9 @@ function cas_update_6303() {
  */
 function cas_update_6304() {
   foreach (array('cas', 'caslogout') as $link_path) {
-    $mlid = db_query("SELECT mlid FROM {menu_links} WHERE link_path = :link_path AND module = :module", array(':link_path' => $link_path, ':module' => 'system'))->fetchField();
+    $mlid = db_result(db_query("SELECT mlid FROM {menu_links} WHERE link_path = '%s' AND module = '%s'", $link_path, 'system'));
     $link = menu_link_load($mlid);
     menu_link_save($link);
   }
+  return array();
 }
