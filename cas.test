@@ -25,7 +25,7 @@ class CasTestHelper extends DrupalWebTestCase {
     $this->admin_user = $this->drupalCreateUser(array('administer users', 'administer cas'));
 
     // Download and extract in PHPCAS.
-    $this->downloadExtractPhpCas('1.1.3');
+    $this->downloadExtractPhpCas('1.2.1');
   }
 
   /**
@@ -74,11 +74,17 @@ class CasTestHelper extends DrupalWebTestCase {
       // Extract the files.
       $archiver = new Archive_Tar($local_archive);
       $archiver->extract($simpletest_cache);
-      if ($version == '1.1.3') {
-        // Work around issue https://issues.jasig.org/browse/PHPCAS-105.
-        // @see http://drupal.org/node/1120034
-        $result = drupal_http_request('http://drupal.org/files/issues/CAS-1.1.3-CAS-client.txt');
-        file_put_contents($cas_library_dir . '/CAS/client.php', $result->data);
+      // Work around issue https://issues.jasig.org/browse/PHPCAS-105.
+      // @see http://drupal.org/node/1120034
+      switch ($version) {
+        case '1.1.3':
+          $result = drupal_http_request('http://drupal.org/files/issues/CAS-1.1.3-CAS-client.txt');
+          file_put_contents($cas_library_dir . '/CAS/client.php', $result->data);
+          break;
+        case '1.2.1':
+          $result = drupal_http_request('http://drupal.org/files/issues/CAS-1.2.1-CAS-client_0.txt');
+          file_put_contents($cas_library_dir . '/CAS/client.php', $result->data);
+          break;
       }
     }
 
@@ -130,15 +136,18 @@ class CasTestHelper extends DrupalWebTestCase {
    * @param $account
    *   A user object with a valid CAS username field, or the CAS username as a
    *   string.
+   * @param $attributes
+   *   Additional attributes for the CAS user.
    */
-  function casLogin($account) {
+  function casLogin($account, $attributes = array()) {
     if ($this->loggedInUser) {
       $this->drupalLogout();
     }
 
     // Log in the user.
     $cas_name = is_object($account) ? $account->cas_name : $account;
-    variable_set('cas_test_cas_name', $cas_name);
+    $cas_user = array('name' => $cas_name, 'attributes' => $attributes);
+    variable_set('cas_test_cas_user', $cas_user);
     $this->drupalGet('cas');
 
     $pass = $this->assertLink(t('Log out'), 0, t('CAS user %cas_name successfully logged in.', array('%cas_name' => $cas_name)), t('User login'));
@@ -307,7 +316,7 @@ class CasUserTestCase extends CasTestHelper {
    */
   function testCasAutoRegister() {
     $cas_name = $this->randomName();
-    variable_set('cas_test_cas_name', $cas_name);
+    variable_set('cas_test_cas_user', array('name' => $cas_name));
 
     // Test that the user is not automatically registered.
     variable_set('cas_user_register', FALSE);
@@ -324,7 +333,7 @@ class CasUserTestCase extends CasTestHelper {
     // Create a new user.
     $user2 = $this->drupalCreateUser();
     $cas_name = $user2->name;
-    variable_set('cas_test_cas_name', $cas_name);
+    variable_set('cas_test_cas_user', array('name' => $cas_name));
 
     // Test that CAS does not hijack an existing username.
     $this->drupalGet('cas');
@@ -454,7 +463,7 @@ class CasLoginRedirectionTestCase extends CasTestHelper {
     // Create a CAS user.
     $account = $this->casCreateUser();
     $cas_name = $account->cas_name;
-    variable_set('cas_test_cas_name', $cas_name);
+    variable_set('cas_test_cas_user', array('name' => $cas_name));
 
     // Test going to 'cas'
     $this->drupalGet('cas');
@@ -602,7 +611,7 @@ class CasGatewayTestCase extends CasTestHelper {
     // Create a user.
     $cas_name = $this->randomName();
     $account = $this->casCreateUser($cas_name);
-    variable_set('cas_test_cas_name', $cas_name);
+    variable_set('cas_test_cas_user', array('name' => $cas_name));
 
     $this->drupalGet('node');
     $this->assertLoggedIn($account);
@@ -629,7 +638,7 @@ class CasRequiredLoginTestCase extends CasTestHelper {
     $node1 = $this->drupalCreateNode();
     $node2 = $this->drupalCreateNode();
     $account = $this->casCreateUser();
-    variable_set('cas_test_cas_name', $account->cas_name);
+    variable_set('cas_test_cas_user', array('name' => $account->cas_name));
 
     $this->drupalGet("node/$node2->nid");
 
@@ -651,7 +660,7 @@ class CasRequiredLoginTestCase extends CasTestHelper {
     $this->assertField('pass', t('Password field found.'), t('Logout'));
 
     // Verify that accessing any other page redirects to the login page.
-    variable_del('cas_test_cas_name');
+    variable_del('cas_test_cas_user');
     $this->drupalGet('node');
     $this->assertText('No CAS name provided.');
   }
@@ -662,7 +671,7 @@ class CasRequiredLoginTestCase extends CasTestHelper {
   function testCasExclude() {
     $node = $this->drupalCreateNode();
     $account = $this->casCreateUser();
-    variable_set('cas_test_cas_name', $account->cas_name);
+    variable_set('cas_test_cas_user', array('name' => $account->cas_name));
 
     variable_set('cas_check_first', TRUE);
     variable_set('cas_exclude', "node/$node->nid");
