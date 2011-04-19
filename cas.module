@@ -953,6 +953,22 @@ function cas_login_validate($form, &$form_state) {
   drupal_goto('cas', $form_state['values']['cas.return_to']);
 }
 
+/**
+ * Implements hook_token_list().
+ */
+function cas_token_list($type = 'all') {
+  module_load_include('tokens.inc', 'cas');
+  return _cas_token_list($type);
+}
+
+/**
+ * Implements hook_token_values().
+ */
+function cas_token_values($type, $object = NULL) {
+  module_load_include('tokens.inc', 'cas');
+  return _cas_token_values($type, $object);
+}
+
 /*
  * CAS Sigle Sign Out - BEGIN
  */
@@ -1167,7 +1183,6 @@ function cas_phpcas_attributes($cas_name = NULL) {
 
   return array();
 }
-
 
 /**
  * Insert an array into the specified position of another array.
