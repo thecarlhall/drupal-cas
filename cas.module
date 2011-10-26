@@ -877,9 +877,8 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
           // The user is not an administrator, so selectively remove the e-mail
           // and password fields.
           if (variable_get('cas_hide_email', 0)) {
-            // We cannot just unset mail, as then the form throws an error.
-            // Also, we have to provide a reasonable default as otherwise there
-            // will be a validation errors.
+            // We cannot just set #access to FALSE, as the form throws an error if the current
+            // value would not pass validation.
             $form['account']['mail']['#type'] = 'hidden';
             $form['account']['mail']['#value'] = $form['account']['mail']['#default_value'];
             if (!$form['account']['mail']['#default_value']) {
@@ -887,7 +886,7 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
             }
           }
           if (variable_get('cas_hide_password', 0)) {
-            unset($form['account']['pass']);
+            $form['account']['pass']['#access'] = FALSE;
           }
         }
       }
