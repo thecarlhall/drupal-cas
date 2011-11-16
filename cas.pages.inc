@@ -37,16 +37,10 @@ function cas_user_add($form_state, $account) {
   $form['cas_name'] = array(
     '#type' => 'textfield',
     '#title' => t('CAS username'),
+    '#element_validate' => array('_cas_name_element_validate'),
   );
   $form['submit'] = array('#type' => 'submit', '#value' => t('Add a CAS username'));
   return $form;
-}
-
-function cas_user_add_validate($form, &$form_state) {
-  // Check for existing entries.
-  if (db_result(db_query("SELECT cas_name FROM {cas_user} WHERE cas_name = '%s'", $form_state['values']['cas_name']))) {
-    form_set_error('cas_name', t('The CAS username is already in use on this site.'));
-  }
 }
 
 function cas_user_add_submit($form, &$form_state) {
