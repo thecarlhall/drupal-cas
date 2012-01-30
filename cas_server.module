@@ -195,16 +195,27 @@ function _cas_server_save_ticket($uid, $service) {
   return $ticket;
 }
 /**
- * Cas Logout
+ * Menu callback; triggers a CAS logout.
+ *
  * @TODO: Implement single sign out support
  */
 function cas_server_logout() {
+  global $user;
+
+  watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
+
   // Destroy the current session:
   session_destroy();
-  module_invoke_all('user', 'logout', NULL, $user);
-  $output = t('<p>You have been logged out successfully</p>');
-  if ($_GET['url'])  {
-    $output .= '<p>'. l(t('Continue'), $_GET['url']) .'</p>';
+  // Only variables can be passed by reference workaround.
+  $null = NULL;
+  user_module_invoke('logout', $null, $user);
+
+  // Load the anonymous user
+  $user = drupal_anonymous_user();
+
+  $output = '<p>' . t('You have been logged out successfully.') . '</p>';
+  if (isset($_GET['url'])) {
+    $output .= '<p>' . l(t('Continue'), $_GET['url']) . '</p>';
   }
   return $output;
 }
