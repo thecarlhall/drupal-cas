@@ -405,7 +405,10 @@ function cas_translated_menu_link_alter(&$item, $map) {
  * Instead of the login page, we redirect to the front page.
  */
 function cas_login_destination() {
-  $destination = user_login_destination();
+  // Equivalent to user_login_destination(), which appeared first in Drupal 6.19.
+  $destination = drupal_get_destination();
+  $destination = ($destination == 'destination=user%2Flogin') ? 'destination=user' : $destination;
+
   return $destination == 'destination=cas' ? 'destination=' : $destination;
 }
 
@@ -653,7 +656,7 @@ function cas_block($op = 'list', $delta = 0, $edit = array()) {
  * Login form for the CAS login block.
  */
 function cas_login_block($form_state) {
-  $form['cas.return_to'] = array('#type' => 'hidden', '#value' => user_login_destination());
+  $form['cas.return_to'] = array('#type' => 'hidden', '#value' => cas_login_destination());
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t(variable_get('cas_login_invite', CAS_LOGIN_INVITE_DEFAULT)),
@@ -853,7 +856,7 @@ function cas_form_alter(&$form, &$form_state, $form_id) {
           '#weight' => -1,
           '#description' => t(variable_get('cas_login_redir_message', CAS_LOGIN_REDIR_MESSAGE)),
         );
-        $form['cas.return_to'] = array('#type' => 'hidden', '#value' => user_login_destination());
+        $form['cas.return_to'] = array('#type' => 'hidden', '#value' => cas_login_destination());
       }
       break;
 
