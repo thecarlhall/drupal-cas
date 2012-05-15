@@ -14,7 +14,7 @@
  *   If specified, the CAS attributes for the user.
  */
 function theme_cas_service_validate_success($name, $attributes = array(), $style = 'jasig') {
-  $output .= "<cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'>\n";
+  $output = "<cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'>\n";
   $output .= "<cas:authenticationSuccess>\n";
   $output .= "<cas:user>$name</cas:user>\n";
   $output .= theme('cas_service_validate_attributes', $attributes, $style);
