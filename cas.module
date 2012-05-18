@@ -15,6 +15,11 @@ define('CAS_LOGIN_DRUPAL_INVITE_DEFAULT', 'Cancel CAS login');
 define('CAS_LOGIN_REDIR_MESSAGE', 'You will be redirected to the secure CAS login page.');
 define('CAS_EXCLUDE', 'services/*');
 
+// Frequency of CAS Gateway checking.
+define('CAS_CHECK_NEVER', -2);
+define('CAS_CHECK_ONCE', -1);
+define('CAS_CHECK_ALWAYS', 0);
+
 /**
  * Implementation of hook_init().
  *
@@ -86,8 +91,6 @@ function cas_login_check($force_authentication = TRUE) {
   }
   else {
     $logged_in = phpCAS::checkAuthentication();
-    // Set the login tested cookie
-    setcookie('cas_login_checked', 'true');
 
     // We're done cause we're not logged in.
     if (!$logged_in) {
@@ -282,6 +285,8 @@ function cas_phpcas_init($force = FALSE) {
 
   $service = isset($_GET['q']) ? $_GET['q'] : 'cas';
   phpCAS::setFixedServiceURL(url($service, array('query' => cas_login_destination(), 'absolute' => TRUE)));
+
+  phpCAS::setCacheTimesForAuthRecheck((int) variable_get('cas_check_frequency', CAS_CHECK_NEVER));
 
   // Allow other modules to call phpCAS routines. We do not call
   // drupal_alter() since there are no parameters to pass.
@@ -712,13 +717,8 @@ function cas_login_block_submit($form, &$form_state) {
  *   authenticated, FALSE otherwise.
  */
 function _cas_allow_check_for_login() {
-  if (!variable_get('cas_check_first', 0)) {
+  if (variable_get('cas_check_frequency', CAS_CHECK_NEVER) == CAS_CHECK_NEVER) {
     // The user has disabled the feature.
-    return FALSE;
-  }
-
-  // Check to see if we already have.
-  if (!empty($_COOKIE['cas_login_checked'])) {
     return FALSE;
   }
 
