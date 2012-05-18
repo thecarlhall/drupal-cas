@@ -824,3 +824,34 @@ class CasLoginBlockTestCase extends CasTestHelper {
     $this->assertCasLoginBlock(FALSE);
   }
 }
+
+class CasNoPhpCasTestCase extends DrupalWebTestCase {
+  protected $admin_user;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'CAS without phpCAS',
+      'description' => 'Test the error messages if phpCAS is not present.',
+      'group' => 'Central Authentication Service',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('cas'));
+
+    // Create admin user.
+    $this->admin_user = $this->drupalCreateUser(array('administer users', 'administer cas'));
+  }
+
+  function testConfigPage() {
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet('admin/config/people/cas');
+    $this->assertText('The phpCAS library was not found or could not be loaded.');
+  }
+
+  function testCasLogin() {
+    $this->drupalGet('cas');
+    $this->assertUrl('');
+  }
+
+}
