@@ -1060,27 +1060,32 @@ function _cas_single_sign_out_check() {
       if ($cas_session_indexes) {
         $cas_session_index = (string)$cas_session_indexes[0];
         // Log them out now.
-        // first lets find out who we want to log off
-
-        $result = db_query_range("SELECT cld.uid FROM {cas_login_data} cld WHERE cld.cas_session_id = :ticket", 0 , 1, array(':ticket' => $cas_session_index));
-        foreach ($result as $record) {
-            $uid = $record->uid;
-            $acct = user_load($uid);
-            watchdog('user', 'Session closed for %name.', array('%name' => $acct->name));
-            // remove all entry for user id in cas_login_data
-            db_delete('cas_login_data')
-              ->condition('uid', $uid)
-              ->execute();
-
-            // remove their session
-            db_delete('sessions')
-              ->condition('uid', $uid)
-              ->execute();
-        }
+        cas_single_sign_out_callback($cas_session_index);
       }
     }
     // This request is done, so just exit.
     exit();
+  }
+}
+
+/**
+ * Log out the user with the specified ticket.
+ */
+function cas_single_sign_out_callback($ticket) {
+  $record = db_query_range("SELECT cld.uid FROM {cas_login_data} cld WHERE cld.cas_session_id = :ticket", 0 , 1, array(':ticket' => $ticket))->fetchObject();
+  if ($record) {
+    $uid = $record->uid;
+    $account = user_load($uid);
+    watchdog('user', 'Session closed for %name.', array('%name' => $account->name));
+    // remove all entry for user id in cas_login_data
+    db_delete('cas_login_data')
+      ->condition('uid', $uid)
+      ->execute();
+
+    // remove their session
+    db_delete('sessions')
+      ->condition('uid', $uid)
+      ->execute();
   }
 }
 
