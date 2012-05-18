@@ -34,8 +34,14 @@ function cas_init() {
     return;
   }
 
-  // Process a single-sign out request.
-  _cas_single_sign_out_check();
+  // Initialize phpCAS, handle logout requests.
+  if (!@cas_phpcas_load()) {
+    // phpCAS could not be found, there is nothing else to do.
+    return;
+  }
+
+  cas_phpcas_init();
+  phpCAS::handleLogoutRequests(FALSE);
 
   // If a user is not logged in, consider using CAS authentication.
   if (!$user->uid) {
@@ -62,15 +68,8 @@ function cas_login_check($force_authentication = TRUE) {
     return;
   }
 
-  if (!cas_phpcas_load()) {
-    // No need to print a message, as the user will already see the failed
-    // include_once calls.
-    return;
-  }
-
   // Start a drupal session
   drupal_session_start();
-  _cas_single_sign_out_save_ticket();  // We use this later for CAS 3 logoutRequests
 
   // Initialize phpCAS.
   cas_phpcas_init();
@@ -273,6 +272,10 @@ function cas_phpcas_init() {
   phpCAS::setFixedServiceURL(url($service, array('query' => cas_login_destination(), 'absolute' => TRUE)));
 
   phpCAS::setCacheTimesForAuthRecheck((int) variable_get('cas_check_frequency', CAS_CHECK_NEVER));
+
+  // Set callbacks
+  phpCAS::setSingleSignoutCallback('cas_single_sign_out_callback');
+  phpCAS::setPostAuthenticateCallback('cas_post_authenticate_callback');
 
   // Allow other modules to call phpCAS routines. We do not call
   // drupal_alter() since there are no parameters to pass.
@@ -1045,27 +1048,12 @@ function cas_login_submit(&$form, &$form_state) {
   drupal_goto('cas', array('query' => $form_state['values']['cas.return_to']));
 }
 
-function _cas_single_sign_out_check() {
-  if (isset($_POST["logoutRequest"])) {
-    $cas_logout_request_xml_string = utf8_encode($_POST["logoutRequest"]);     // it's important!
-    $cas_logout_request_xml = new SimpleXMLElement($cas_logout_request_xml_string);
-    if (is_object($cas_logout_request_xml)) {
-      $namespaces = $cas_logout_request_xml->getNameSpaces();
-      $xsearch = 'SessionIndex';
-      if (isset($namespaces['samlp'])) {
-        $cas_logout_request_xml->registerXPathNamespace('samlp', $namespaces['samlp']);
-        $xsearch = 'samlp:SessionIndex';
-      }
-      $cas_session_indexes = $cas_logout_request_xml->xpath($xsearch);
-      if ($cas_session_indexes) {
-        $cas_session_index = (string)$cas_session_indexes[0];
-        // Log them out now.
-        cas_single_sign_out_callback($cas_session_index);
-      }
-    }
-    // This request is done, so just exit.
-    exit();
-  }
+/**
+ * Save CAS login ticket for further processing.
+ */
+function cas_post_authenticate_callback($ticket) {
+  drupal_session_start();
+  $_SESSION['cas_ticket'] = $ticket;
 }
 
 /**
@@ -1127,16 +1115,6 @@ function _cas_single_sign_out_save_token($user) {
         ))
       ->execute();
     unset($_SESSION['cas_ticket']);
-  }
-}
-
-/**
- * Make sure that we persist ticket because of redirects performed by CAS.
- *
- */
-function _cas_single_sign_out_save_ticket() {
-  if (isset($_GET['ticket'])) {
-    $_SESSION['cas_ticket'] = $_GET['ticket'];
   }
 }
 
