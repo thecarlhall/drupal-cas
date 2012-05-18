@@ -650,7 +650,7 @@ class CasGatewayTestCase extends CasTestHelper {
 
   function setUp() {
     parent::setUp();
-    variable_set('cas_check_first', TRUE);
+    variable_set('cas_check_frequency', CAS_CHECK_ONCE);
   }
 
   /**
@@ -734,7 +734,7 @@ class CasRequiredLoginTestCase extends CasTestHelper {
     $account = $this->casCreateUser();
     $this->setCasUser($account);
 
-    variable_set('cas_check_first', TRUE);
+    variable_set('cas_check_frequency', CAS_CHECK_ONCE);
     variable_set('cas_exclude', "node/$node->nid");
 
     // Visit an excluded page and ensure we did not try to log in.

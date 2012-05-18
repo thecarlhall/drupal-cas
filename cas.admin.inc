@@ -212,11 +212,16 @@ function cas_admin_settings() {
     '#collapsed' => TRUE,
   );
 
-  $form['pages']['cas_check_first'] = array(
-    '#type' => 'checkbox',
+  $form['pages']['cas_check_frequency'] = array(
+    '#type' => 'select',
     '#title' => t('Check with the CAS server to see if the user is already logged in?'),
-    '#default_value' => variable_get('cas_check_first', 0),
-    '#description' => t('This implements the <a href="@cas-gateway">Gateway feature</a> of the CAS Protocol. The check is only performed the first time a user visits your site, so that the local drupal logout is still useful for site admins.', array('@cas-gateway' => 'https://wiki.jasig.org/display/CAS/gateway')),
+    '#default_value' => variable_get('cas_check_frequency', CAS_CHECK_NEVER),
+    '#options' => array(
+      CAS_CHECK_NEVER => 'Never',
+      CAS_CHECK_ONCE => 'Once, but not again until login',
+      CAS_CHECK_ALWAYS => 'Always',
+    ),
+    '#description' => t('This implements the <a href="@cas-gateway">Gateway feature</a> of the CAS Protocol. Enabling this may prevent logging out of Drupal without also logging out of CAS.', array('@cas-gateway' => 'https://wiki.jasig.org/display/CAS/gateway')),
   );
 
   $form['pages']['cas_access'] = array(
