@@ -36,60 +36,7 @@ function cas_admin_settings() {
     );
   }
 
-
-  $form['server'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('CAS Server'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-  );
-
-  $form['server']['cas_version'] = array(
-    '#type' => 'radios',
-    '#title' => t('Version'),
-    '#default_value' => variable_get('cas_version', '2.0'),
-    '#options' => array(
-      '1.0' => '1.0',
-      '2.0' => t('2.0 or higher'),
-      'S1' => t('SAML Version 1.1'),
-    ),
-  );
-
-  $form['server']['cas_server'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Hostname'),
-    '#default_value' => variable_get('cas_server', ''),
-    '#size' => 30,
-    // Hostnames can be 255 characters long.
-    '#maxlength' => 255,
-    '#description' => t('Hostname or IP Address of the CAS server.'),
-  );
-
-  $form['server']['cas_port'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Port'),
-    '#default_value' => variable_get('cas_port', '443'),
-    '#size' => 5,
-    // The maximum port number is 65536, 5 digits.
-    '#maxlength' => 5,
-    '#description' => t('443 is the standard SSL port. 8443 is the standard non-root port for Tomcat.'),
-  );
-
-  $form['server']['cas_uri'] = array(
-    '#type' => 'textfield',
-    '#title' => t('URI'),
-    '#default_value' => variable_get('cas_uri', ''),
-    '#size' => 30,
-    '#description' => t('If CAS is not at the root of the host, include a URI (e.g., /cas).'),
-  );
-
-  $form['server']['cas_cert'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Certificate Authority PEM Certificate'),
-    '#default_value' => variable_get('cas_cert', ''),
-    '#maxlength' => 255,
-    '#description' => t('The PEM certificate of the Certificate Authority that issued the certificate of the CAS server. If omitted, the certificate authority will not be verified.'),
-  );
+  cas_add_server_forms($form);
 
   $form['login'] = array(
     '#type' => 'fieldset',
@@ -333,6 +280,13 @@ function cas_admin_settings() {
     '#description' => t("Leave empty if you don't want debugging output."),
   );
 
+  $form['advanced']['cas_server_count'] = array(
+    '#type' => 'textfield',
+    '#title' => t('CAS Server Count'),
+    '#default_value' => variable_get('cas_server_count', 1),
+    '#description' => t("Number of CAS servers to allow configuration for."),
+  );
+
   return system_settings_form($form);
 }
 
@@ -358,4 +312,76 @@ function cas_library_version_check($element, &$form_state) {
     $element['#suffix'] = '<div class="error messages">' . t('The phpCAS library was not found or could not be loaded.') . '</div>';
   }
   return $element;
+}
+
+/**
+ * Add form fields to collect server information.
+ *
+ * @param $form The form to add to.
+ */
+function cas_add_server_forms(&$form) {
+  $server_count = variable_get('cas_server_count', 1);
+  for ($form_number = 1; $form_number <= intval($server_count); $form_number++) {
+    $form['server'.$form_number] = array(
+      '#type' => 'fieldset',
+      '#title' => t('CAS Server '.$form_number),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+    );
+
+    $form['server'.$form_number]['cas_nickname'.$form_number] = array(
+      '#type' => 'textfield',
+      '#title' => t('Nickname'),
+      '#default_value' => variable_get('cas_nickname'.$form_number, ''),
+      '#size' => 30,
+      '#description' => t('URL identifier to engage this server.'),
+      '#disabled' => variable_get('cas_nickname'.$form_number, '') !== '',
+    );
+
+    $form['server'.$form_number]['cas_server'.$form_number] = array(
+      '#type' => 'textfield',
+      '#title' => t('Hostname'),
+      '#default_value' => variable_get('cas_server'.$form_number, ''),
+      '#size' => 30,
+      // Hostnames can be 255 characters long.
+      '#maxlength' => 255,
+      '#description' => t('Hostname or IP Address of the CAS server.'),
+    );
+
+    $form['server'.$form_number]['cas_port'.$form_number] = array(
+      '#type' => 'textfield',
+      '#title' => t('Port'),
+      '#default_value' => variable_get('cas_port'.$form_number, '443'),
+      '#size' => 5,
+      // The maximum port number is 65536, 5 digits.
+      '#maxlength' => 5,
+      '#description' => t('443 is the standard SSL port. 8443 is the standard non-root port for Tomcat.'),
+    );
+
+    $form['server'.$form_number]['cas_uri'.$form_number] = array(
+      '#type' => 'textfield',
+      '#title' => t('URI'),
+      '#default_value' => variable_get('cas_uri'.$form_number, ''),
+      '#size' => 30,
+      '#description' => t('If CAS is not at the root of the host, include a URI (e.g., /cas).'),
+    );
+
+    $form['server'.$form_number]['cas_cert'.$form_number] = array(
+      '#type' => 'textfield',
+      '#title' => t('Certificate Authority PEM Certificate'),
+      '#default_value' => variable_get('cas_cert'.$form_number, ''),
+      '#maxlength' => 255,
+      '#description' => t('The PEM certificate of the Certificate Authority that issued the certificate of the CAS server. If omitted, the certificate authority will not be verified.'),
+    );
+
+    $form['server'.$form_number]['cas_disabled'.$form_number] = array(
+      '#type' => 'radios',
+      '#title' => t('Disabled'),
+      '#default_value' => variable_get('cas_disabled'.$form_number, 0),
+      '#description' => t('Whether this server is disabled for authentication.'),
+      '#options' => array(1 => 'True', 0 => 'False'),
+    );
+  }
+
+  return $form;
 }

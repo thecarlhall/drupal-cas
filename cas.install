@@ -78,7 +78,6 @@ function cas_uninstall() {
   variable_del('cas_allow_rememberme');
   variable_del('cas_authmap');
   variable_del('cas_auto_assigned_role');
-  variable_del('cas_cert');
   variable_del('cas_changePasswordURL');
   variable_del('cas_check_first');
   variable_del('cas_debugfile');
@@ -97,13 +96,27 @@ function cas_uninstall() {
   variable_del('cas_pages');
   variable_del('cas_pgtformat');
   variable_del('cas_pgtpath');
-  variable_del('cas_port');
   variable_del('cas_proxy');
   variable_del('cas_registerURL');
-  variable_del('cas_server');
-  variable_del('cas_uri');
   variable_del('cas_user_register');
-  variable_del('cas_version');
+
+  // form variables
+  $server_count = 1;
+  while (TRUE) {
+    if (variable_get('cas_server'.$server_count)) {
+      variable_del('cas_cert'.$server_count);
+      variable_del('cas_nickname'.$server_count);
+      variable_del('cas_uri'.$server_count);
+      variable_del('cas_port'.$server_count);
+      variable_del('cas_server'.$server_count);
+      variable_del('cas_version'.$server_count);
+
+      $server_count++;
+    } else {
+      break;
+    }
+  }
+  variable_del('cas_server_count');
 
   // And old (un-used) variables.
   variable_del('cas_cert_verify');
