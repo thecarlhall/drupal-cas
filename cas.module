@@ -237,12 +237,19 @@ function cas_phpcas_init() {
   }
   $initialized = TRUE;
 
+  // find the appropriate server settings to use
+  list($server_nickname, $server_id) = _cas_server_info();
+  if (is_null($server_id)) {
+    // TODO do something here to signal error
+    error_log("server_id is null for ${server_nickname}.");
+  }
+
   // Variable set
-  $server_version    = (string)variable_get('cas_version', '2.0');
-  $server_cas_server = (string)variable_get('cas_server', 'sso-cas.univ-rennes1.fr');
-  $server_port       = (int)variable_get('cas_port', '443');
-  $server_uri        = (string)variable_get('cas_uri', '');
-  $cas_cert          = (string)variable_get('cas_cert', '');
+  $server_version    = (string)variable_get('cas_version'.$server_id, '2.0');
+  $server_cas_server = (string)variable_get('cas_server'.$server_id, '');
+  $server_port       = (int)variable_get('cas_port'.$server_id, '443');
+  $server_uri        = (string)variable_get('cas_uri'.$server_id, '');
+  $cas_cert          = (string)variable_get('cas_cert'.$server_id, '');
   if ( ($debugFile = variable_get("cas_debugfile", "")) != "" ) {
     phpCAS::setDebug($debugFile);
   }
@@ -267,7 +274,10 @@ function cas_phpcas_init() {
   }
 
   $service = isset($_GET['q']) ? $_GET['q'] : 'cas';
-  phpCAS::setFixedServiceURL(url($service, array('query' => cas_login_destination(), 'absolute' => TRUE)));
+  $query = cas_login_destination();
+  // TODO should we do something on $updated == false?
+  $updated = _cas_set_server_name($server_nickname, $query);
+  phpCAS::setFixedServiceURL(url($service, array('query' => $query, 'absolute' => TRUE)));
 
   // Allow other modules to call phpCAS routines. We do not call
   // drupal_alter() since there are no parameters to pass.
@@ -1284,4 +1294,101 @@ function cas_views_api() {
     'api' => 3,
     'path' => drupal_get_path('module', 'cas') . '/includes/views',
   );
+}
+
+/**
+ * Find the server ID for a given server nickname.  The ID is the position of
+ * the server configuration as defined in the admin.
+ *
+ * @param $server_nickname The nickname to look up in the server
+ *   configurations.
+ * @return Integer of server ID if found. NULL otherwise.
+ */
+function _cas_find_server_id($server_nickname) {
+  $server_id = NULL;
+  $server_count = variable_get('cas_server_count', 0);
+  for ($count = 1; $count < $server_count; $count++) {
+    $nick = variable_get('cas_nickname'.$count, '');
+    if (empty($nick)) {
+      break;
+    } elseif ($nick == $server_nickname) {
+      $disabled = variable_get('cas_disabled'.$count, FALSE);
+      if (!$disabled) {
+        $server_id = $count;
+        break;
+      }
+    }
+  }
+  return $server_id;
+}
+
+/**
+ * Get the name of the server that the user is interacting with.
+ *
+ * @return (String) Name of server if found. Otherwise, NULL.
+ */
+function _cas_server_name() {
+  $server_name = NULL;
+  if (!empty($_REQUEST['server'])) {
+    $server_name = $_REQUEST['server'];
+    error_log("Found server in request as ${server_name}");
+  } elseif(!empty($_COOKIE['_cas_server_name'])) {
+    // TODO read from cookie
+    $server_name = $_COOKIE["_cas_server_name"];
+    error_log("Found server in cookie as ${server_name}");
+
+    // Delete the cookie as it should only be read once on the return from the
+    // server. No sense in leaving this around.
+    setcookie("_cas_server_name", $server_name, time() - 3600, '/', $_SERVER['HTTP_HOST'], TRUE, TRUE);
+    error_log("Deleted cookie for ${_SERVER['HTTP_HOST']}");
+  } else {
+    error_log("Did not find the server name [${_SERVER['HTTP_HOST']}]");
+  }
+  return $server_name;
+}
+
+/**
+ * Set the server name for the request.  If $query is NULL, the server name is
+ * written to a cookie.
+ *
+ * @param $server_name [required] The server name to persist.
+ * @param $query       [optional] An associative array of elements to add to
+ *   the request query.  If this is NULL, $server_name is written to a cookie.
+ * @return (boolean) Whether the server name was set to a storage mechanism
+ *   (query, cookie);
+ */
+function _cas_set_server_name($server_name, &$query = NULL) {
+  $update = false;
+  if (!is_null($query)) {
+    $query['server'] = $server_name;
+    $update = true;
+  } else {
+    // TODO set a cookie
+    $update = setcookie("_cas_server_name", $server_name, 0, '/', $_SERVER['HTTP_HOST'], TRUE, TRUE);
+    error_log("Set cookie for ${_SERVER['HTTP_HOST']}");
+  }
+  return $update;
+}
+
+/**
+ * Get combined information about the CAS server to use.
+ *
+ * @return Array of $server_name, $server_id. The values will be NULL is not
+ *   available.
+ *   * $server_name = Pulled from the request or a cookie. If this is null,
+ *       $server_id must be null.
+ *   * $server_id = Looked up in Drupal variables as set by the settings for
+ *       CAS.
+ */
+function _cas_server_info() {
+  $server_id = NULL;
+  $server_nickname = _cas_server_name();
+  if (!is_null($server_nickname)) {
+    $server_id = _cas_find_server_id($server_nickname);
+    //if (!is_null($server_id)) {
+    //  error_log("Using server ${server_id}:${server_nickname}");
+    //}
+  }
+
+  return array($server_nickname, $server_id);
 }

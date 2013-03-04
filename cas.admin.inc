@@ -334,8 +334,8 @@ function cas_add_server_forms(&$form) {
       '#title' => t('Nickname'),
       '#default_value' => variable_get('cas_nickname'.$form_number, ''),
       '#size' => 30,
-      '#description' => t('URL identifier to engage this server.'),
-      '#disabled' => variable_get('cas_nickname'.$form_number, '') !== '',
+      '#description' => t('URL identifier to engage this server. This is also used to put users into a namespace to avoid collision between CAS server.<br/>'.
+        '<strong>WARNING: CHANGING THIS AFTER USERS HAVE USED THE SERVER WILL CAUSE ORPHANED ACCOUNTS!</strong>'),
     );
 
     $form['server'.$form_number]['cas_server'.$form_number] = array(
