@@ -241,7 +241,11 @@ function cas_phpcas_init() {
   list($server_nickname, $server_id) = _cas_server_info();
   if (is_null($server_id)) {
     // TODO do something here to signal error
-    error_log("server_id is null for ${server_nickname}.");
+    watchdog('cas', "server_id is null for '${server_nickname}'", WATCHDOG_ERROR);
+    drupal_set_message(t('Unable to find authentication server'));
+    return;
+  } else {
+    //watchdog('cas', "Using server ${server_id}:${server_nickname}");
   }
 
   // Variable set
@@ -518,6 +522,7 @@ function cas_user_load($users) {
  */
 function cas_user_insert(&$edit, $account, $category) {
   if (!empty($edit['cas_name'])) {
+    //watchdog('cas', "User inserting with cas_name: ${edit['cas_name']}");
     db_insert('cas_user')
       ->fields(array(
         'cas_name' => $edit['cas_name'],
@@ -1331,18 +1336,18 @@ function _cas_server_name() {
   $server_name = NULL;
   if (!empty($_REQUEST['server'])) {
     $server_name = $_REQUEST['server'];
-    error_log("Found server in request as ${server_name}");
+    //watchdog('cas', "Found server in request as ${server_name}");
   } elseif(!empty($_COOKIE['_cas_server_name'])) {
     // TODO read from cookie
     $server_name = $_COOKIE["_cas_server_name"];
-    error_log("Found server in cookie as ${server_name}");
+    //watchdog('cas', "Found server in cookie as ${server_name}");
 
     // Delete the cookie as it should only be read once on the return from the
     // server. No sense in leaving this around.
     setcookie("_cas_server_name", $server_name, time() - 3600, '/', $_SERVER['HTTP_HOST'], TRUE, TRUE);
-    error_log("Deleted cookie for ${_SERVER['HTTP_HOST']}");
+    //watchdog('cas', "Deleted cookie for ${_SERVER['HTTP_HOST']}");
   } else {
-    error_log("Did not find the server name [${_SERVER['HTTP_HOST']}]");
+    watchdog('cas', "Did not find the server name for ${_SERVER['HTTP_HOST']}");
   }
   return $server_name;
 }
@@ -1364,8 +1369,10 @@ function _cas_set_server_name($server_name, &$query = NULL) {
     $update = true;
   } else {
     // TODO set a cookie
-    $update = setcookie("_cas_server_name", $server_name, 0, '/', $_SERVER['HTTP_HOST'], TRUE, TRUE);
-    error_log("Set cookie for ${_SERVER['HTTP_HOST']}");
+    $cookie_name = '_cas_server_name';
+    $domain = $_SERVER['HTTP_POST'];
+    $update = setcookie($cookie_name, $server_name, 0, '/', $domain, TRUE, TRUE);
+    //watchdog('cas', "Set ${cookie_name} cookie for ${domain}");
   }
   return $update;
 }
@@ -1385,10 +1392,18 @@ function _cas_server_info() {
   $server_nickname = _cas_server_name();
   if (!is_null($server_nickname)) {
     $server_id = _cas_find_server_id($server_nickname);
-    //if (!is_null($server_id)) {
-    //  error_log("Using server ${server_id}:${server_nickname}");
-    //}
   }
 
   return array($server_nickname, $server_id);
+}
+
+/**
+ * Implement hook_cas_user_alter
+ */
+function cas_cas_user_alter(&$cas_user) {
+  if (!empty($cas_user['name'])) {
+    $cas_server_name = _cas_server_name();
+    $cas_user['name'] = "${cas_server_name}:".$cas_user['name'];
+    //watchdog('cas', "Altered username to ${cas_user['name']}");
+  }
 }
