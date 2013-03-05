@@ -86,8 +86,9 @@ function cas_login_check($force_authentication = TRUE) {
   }
 
   // Build the cas_user object and allow modules to alter it.
+  $cas_name = phpCAS::getUser();
   $cas_user = array(
-    'name' => phpCAS::getUser(),
+    'name' => $cas_name,
     'login' => TRUE,
     'register' => variable_get('cas_user_register', TRUE),
     'attributes' => cas_phpcas_attributes(),
@@ -97,6 +98,10 @@ function cas_login_check($force_authentication = TRUE) {
   // Bail out if a module denied login access for this user or unset the user
   // name.
   if (empty($cas_user['login']) || empty($cas_user['name'])) {
+    // use the possibly updated name field
+    if (!empty($cas_user['name'])) {
+      $cas_name = $cas_user['name'];
+    }
     // Only set a warning if we forced login.
     if ($force_authentication) {
       drupal_set_message(t('The user account %name is not available on this site.', array('%name' => $cas_name)), 'error');
@@ -242,7 +247,7 @@ function cas_phpcas_init() {
   if (is_null($server_id)) {
     // TODO do something here to signal error
     watchdog('cas', "server_id is null for '${server_nickname}'", WATCHDOG_ERROR);
-    drupal_set_message(t('Unable to find authentication server'));
+    drupal_set_message(t('Unable to find authentication server'), 'error');
     return;
   } else {
     //watchdog('cas', "Using server ${server_id}:${server_nickname}");
@@ -1405,5 +1410,11 @@ function cas_cas_user_alter(&$cas_user) {
     $cas_server_name = _cas_server_name();
     $cas_user['name'] = "${cas_server_name}:".$cas_user['name'];
     //watchdog('cas', "Altered username to ${cas_user['name']}");
+  }
+
+  if (empty($cas_user['attributes']['registered_ec'])
+    || $cas_user['attributes']['registered_ec'] != TRUE) {
+    // set the name to null to stop the user from logging in
+    $cas_user['login'] = null;
   }
 }
